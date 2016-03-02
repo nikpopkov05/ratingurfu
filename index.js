@@ -184,18 +184,21 @@ Spider.prototype.get = function(path, cb) {
 Spider.prototype.frame = function(paths, index, count, handler, cb) {
     let self = this;
 
-    console.log(categories);
+    // console.log(categories);
 
     if (index < paths.length) {
-        console.log(paths[index]);
-        console.log('count', count, self.max, 'index', index, paths.length);
+        // console.log(paths[index]);
+        // console.log('count', count, self.max, 'index', index, paths.length);
 
         self.get(paths[index], function(err, buffer) {
             if (!err) {
                 if (buffer) {
+                    let flagScan = true;
                     let parser = new htmlparser.Parser({
                         onopentag: function(name, attribs) {
-                            if (name === 'a' && attribs.href) {
+                            if (name === 'script' || name === 'style') {
+                                flagScan = false;
+                            } else if (name === 'a' && attribs.href) {
                                 if (count < self.max) {
                                     if (attribs.href.indexOf('http://') === 0) {
                                         if (!(attribs.href in self.map)) {
@@ -220,24 +223,28 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
                         },
 
                         ontext: function(text) {
-                            if (text !== '') {
+                            if (text !== '' && flagScan === true) {
                                 let lexemes = tokenize(text);
                                 if (lexemes.length > 0) {
                                     let category = classifier.categorize(text);
                                     if (category !== null) {
                                         categories[category]++;
-                                        // console.log('/**=============');
-                                        // console.log(category);
-                                        // console.log(text);
-                                        // console.log(new Buffer(text));
-                                        // console.log('=============*/\n');
+                                        /*if (category === 'Институт государственного управления и предпринимательства') */{
+                                            console.log('/**=============');
+                                            console.log(category);
+                                            console.log(text);
+                                            console.log(new Buffer(text));
+                                            console.log('=============*/\n');
+                                        }
                                     }
                                 }
                             }
                         },
 
                         onclosetag: function(tagname) {
-
+                            if (tagname === 'script' || tagname === 'style') {
+                                flagScan = true;
+                            }
                         }
                     }, { decodeEntities: true });
 
@@ -284,7 +291,6 @@ Spider.prototype.scan = function(handler) {
 
 var paths = [
     'http://urfu.ru/ru/news/',
-    'http://www.e1.ru/news/spool/section_id-127.html',
     'http://urfu.ru/ru/'
 ];
 var spider = new Spider(paths);
