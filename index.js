@@ -113,7 +113,7 @@ function Spider(paths)
  * cb : function(err: object, buffer: Buffer)
  */
 Spider.prototype.get = function(path, cb) {
-    let time = 10 * 60 * 1000;
+    let time = 1 * 60 * 1000;
     let timeout = null;
 
     try {
@@ -184,7 +184,7 @@ Spider.prototype.get = function(path, cb) {
 Spider.prototype.frame = function(paths, index, count, handler, cb) {
     let self = this;
 
-    // console.log(categories);
+    console.log(categories);
 
     if (index < paths.length) {
         console.log(paths[index]);
@@ -226,11 +226,11 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
                                     let category = classifier.categorize(text);
                                     if (category !== null) {
                                         categories[category]++;
-                                        console.log('/**=============');
-                                        console.log(category);
-                                        console.log(text);
-                                        console.log(new Buffer(text));
-                                        console.log('=============*/\n');
+                                        // console.log('/**=============');
+                                        // console.log(category);
+                                        // console.log(text);
+                                        // console.log(new Buffer(text));
+                                        // console.log('=============*/\n');
                                     }
                                 }
                             }
@@ -280,4 +280,34 @@ Spider.prototype.scan = function(handler) {
     }
 };
 
-module.exports = Spider;
+// module.exports = Spider;
+
+var paths = [
+    'http://urfu.ru/ru/news/',
+    'http://www.e1.ru/news/spool/section_id-127.html',
+    'http://urfu.ru/ru/'
+];
+var spider = new Spider(paths);
+spider.scan();
+
+// setInterval(function(params) {
+//     let arr = [];
+//     for (let key in categories) {
+//         arr.push({
+//             name: key,
+//             total: categories[key]
+//         });
+//     }
+
+//     arr.sort(function(a, b) {
+//         if (a.total > b.total) return -1;
+//         if (a.total < b.total) return 1;
+//         return 0;
+//     });
+
+//     let lines = process.stdout.getWindowSize()[1];
+//     for(var i = 0; i < lines; i++) {
+//         console.log('\r\n');
+//     }
+//     console.log(arr);
+// }, 5000);
