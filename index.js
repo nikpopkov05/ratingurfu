@@ -1,5 +1,6 @@
 'use strict';
 
+var fs = require('fs');
 var url = require('url');
 var http = require('http');
 var htmlparser = require("htmlparser2");
@@ -86,7 +87,7 @@ function tokenizeAndStem(text)
     return outLexemes;
 };
 
-var categories = {};
+var categories = require('./categories.js');
 var db = require('./db.js');
 var bayes = require('bayes');
 var classifier = bayes({tokenizer: tokenizeAndStem});
@@ -229,13 +230,13 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
                                     let category = classifier.categorize(text);
                                     if (category !== null) {
                                         categories[category]++;
-                                        /*if (category === 'Институт государственного управления и предпринимательства') */{
-                                            console.log('/**=============');
-                                            console.log(category);
-                                            console.log(text);
-                                            console.log(new Buffer(text));
-                                            console.log('=============*/\n');
-                                        }
+                                        // /*if (category === 'Институт физической культуры, спорта и молодежной политики') */{
+                                        //     console.log('/**=============');
+                                        //     console.log(category);
+                                        //     console.log(text);
+                                        //     console.log(new Buffer(text));
+                                        //     console.log('=============*/\n');
+                                        // }
                                     }
                                 }
                             }
@@ -291,29 +292,42 @@ Spider.prototype.scan = function(handler) {
 
 var paths = [
     'http://urfu.ru/ru/news/',
+    'http://media.ls.urfu.ru/369',
+    'http://hse.edu.urfu.ru/ingener2/',
+    'http://info.urfu.ru/',
+    'http://mmi.urfu.ru/',
+    'http://lyceum.urfu.ru/main/',
+    'http://sti.urfu.ru/home/',
+    'http://enin.urfu.ru/',
+    'http://urfu.ru/ru/about/units/ppur/fakultet-povyshenija-kvalifikacii-prepodavatelei-i-professionalnoi-perepodgotovki/',
+    'http://fizteh.urfu.ru/',
+    'http://uvc.urfu.ru/',
+    'http://ruzha64.wix.com/uvc-fvo-ustu',
     'http://urfu.ru/ru/'
 ];
 var spider = new Spider(paths);
 spider.scan();
 
-// setInterval(function(params) {
-//     let arr = [];
-//     for (let key in categories) {
-//         arr.push({
-//             name: key,
-//             total: categories[key]
-//         });
-//     }
+setInterval(function(params) {
+    let arr = [];
+    for (let key in categories) {
+        arr.push({
+            name: key,
+            total: categories[key]
+        });
+    }
 
-//     arr.sort(function(a, b) {
-//         if (a.total > b.total) return -1;
-//         if (a.total < b.total) return 1;
-//         return 0;
-//     });
+    arr.sort(function(a, b) {
+        if (a.total > b.total) return -1;
+        if (a.total < b.total) return 1;
+        return 0;
+    });
 
-//     let lines = process.stdout.getWindowSize()[1];
-//     for(var i = 0; i < lines; i++) {
-//         console.log('\r\n');
-//     }
-//     console.log(arr);
-// }, 5000);
+    let lines = process.stdout.getWindowSize()[1];
+    for(var i = 0; i < lines; i++) {
+        console.log('\r\n');
+    }
+    console.log(arr);
+    let data = 'module.exports = ' + JSON.stringify(categories) + ';';
+    fs.writeFileSync(__dirname + '/categories.js', data);
+}, 5000);
