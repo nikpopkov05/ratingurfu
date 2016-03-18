@@ -1,1 +1,3 @@
-module.exports = {};
+module.exports = {
+    "Вольная борьба": 1
+};

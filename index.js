@@ -117,11 +117,11 @@ arrСategories.sort(function(a, b) {
 
 var categoriesSports = require('./categoriesSports.js');
 let arrСategoriesSports = [];
-for (let key in categories) {
+for (let key in categoriesSports) {
     if (key !== 'Other' && key !== 'other') {
         arrСategoriesSports.push({
             name: key,
-            total: categories[key]
+            total: categoriesSports[key]
         });
     }
 }
@@ -284,9 +284,13 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
                                 let lexemes = tokenize(text);
                                 if (lexemes.length > 0) {
                                     // console.log(text);
-                                    let category = classifier.classify(text);
+                                    let category = classifier.classify(text, 3);
                                     if (category !== null) {
-                                        categories[category]++;
+                                        if (category in categories) {
+                                            categories[category]++;
+                                        } else {
+                                            categories[category] = 1;
+                                        }
                                         // /*if (category === 'Институт физической культуры, спорта и молодежной политики') */{
                                             // console.log('/**=============');
                                             // console.log(category);
@@ -297,7 +301,11 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
 
                                     category = classifierSports.classify(text);
                                     if (category !== null) {
-                                        categoriesSports[category]++;
+                                        if (category in categoriesSports) {
+                                            categoriesSports[category]++;
+                                        } else {
+                                            categoriesSports[category] = 1;
+                                        }
                                     }
                                 }
                             }
@@ -426,6 +434,16 @@ function getPage()
         `;
     }
 
+    let tableSports = '';
+    for (let i = 0; i < arrСategoriesSports.length; i++) {
+        tableSports += `
+        <tr>
+            <td>${arrСategoriesSports[i].name}</td>
+            <td>${arrСategoriesSports[i].total}</td>
+        </tr>
+        `;
+    }
+
     let page = `
     <!DOCTYPE HTML>
     <html>
@@ -443,6 +461,16 @@ function getPage()
                 </tr>
 
                 ${table}
+            </table>
+            <table border="1">
+                <caption>Рейтинг институтов УрФУ</caption>
+
+                <tr>
+                    <th>Вид спорта</th>
+                    <th>Количество ссылок</th>
+                </tr>
+
+                ${tableSports}
             </table>
         </body>
     </html>

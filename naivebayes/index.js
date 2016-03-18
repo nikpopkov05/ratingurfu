@@ -98,8 +98,12 @@ function train(text, category)
     }
 }
 
-function classify(text)
+function classify(text, famousMax)
 {
+    if (famousMax === undefined || famousMax === null) {
+        famousMax = 0;
+    }
+
     let wordsUniqueTotal = this.wordUnique.size;
 
     let first = false;
@@ -124,7 +128,7 @@ function classify(text)
             }
             wordsSum += Math.log(freq / (wordsUniqueTotal + wordCount));
         }
-        if (famous > 3) {
+        if (famous > famousMax) {
             let res = Math.log(docCount / this.totalDocuments) + wordsSum;
 
             if (first === false) {
