@@ -4,6 +4,7 @@ var fs = require('fs');
 var url = require('url');
 var http = require('http');
 var htmlparser = require("htmlparser2");
+var express = require('express');
 
 //============================================================
 
@@ -88,12 +89,26 @@ function tokenizeAndStem(text)
 };
 
 var categories = require('./categories.js');
-var db = require('./db.js');
+let arrСategories = [];
+for (let key in categories) {
+    if (key !== 'Other' && key !== 'other') {
+        arrСategories.push({
+            name: key,
+            total: categories[key]
+        });
+    }
+}
+arrСategories.sort(function(a, b) {
+    if (a.total > b.total) return -1;
+    if (a.total < b.total) return 1;
+    return 0;
+});
+
 var bayes = require('bayes');
 var classifier = bayes({tokenizer: tokenizeAndStem});
+
 var db = require('./db.js');
 for (let i = 0; i < db.length; ++i) {
-    categories[db[i].category] = 0;
     classifier.learn(db[i].text, db[i].category);
 }
 
@@ -106,7 +121,7 @@ function Spider(paths)
 {
     this.paths = paths;
     this.index = 0;
-    this.max = 1000;
+    this.max = 8000;
     this.map = {};
 }
 
@@ -207,6 +222,10 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
                                             paths.push(attribs.href);
                                             self.map[attribs.href] = true;
                                             count++;
+
+                                            if (attribs.href.indexOf('http://urfu.ru/ru/news/news/') === 0) {
+                                                console.log(attribs.href);
+                                            }
                                         }
                                     } else {
                                         let obj = url.parse(paths[index]);
@@ -217,6 +236,10 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
                                             paths.push(path);
                                             self.map[path] = true;
                                             count++;
+
+                                            if (path.indexOf('http://urfu.ru/ru/news/news/') === 0) {
+                                                console.log(path);
+                                            }
                                         }
                                     }
                                 }
@@ -309,25 +332,75 @@ var spider = new Spider(paths);
 spider.scan();
 
 setInterval(function(params) {
-    let arr = [];
+    arrСategories = [];
     for (let key in categories) {
-        arr.push({
-            name: key,
-            total: categories[key]
-        });
+        if (key !== 'Other' && key !== 'other') {
+            arrСategories.push({
+                name: key,
+                total: categories[key]
+            });
+        }
     }
-
-    arr.sort(function(a, b) {
+    arrСategories.sort(function(a, b) {
         if (a.total > b.total) return -1;
         if (a.total < b.total) return 1;
         return 0;
     });
 
-    let lines = process.stdout.getWindowSize()[1];
-    for(var i = 0; i < lines; i++) {
-        console.log('\r\n');
-    }
-    console.log(arr);
-    let data = 'module.exports = ' + JSON.stringify(categories) + ';';
+    // let lines = process.stdout.getWindowSize()[1];
+    // for(var i = 0; i < lines; i++) {
+    //     console.log('\r\n');
+    // }
+    // console.log(arrСategories);
+
+    let data = 'module.exports = ' + JSON.stringify(categories, '', 4) + ';';
     fs.writeFileSync(__dirname + '/categories.js', data);
 }, 5000);
+
+function getPage()
+{
+    let table = '';
+    for (let i = 0; i < arrСategories.length; i++) {
+        table += `
+        <tr>
+            <td>${arrСategories[i].name}</td>
+            <td>${arrСategories[i].total}</td>
+        </tr>
+        `;
+    }
+
+    let page = `
+    <!DOCTYPE HTML>
+    <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Рейтинг</title>
+        </head>
+        <body>
+            <table border="1">
+                <caption>Таблица рейтинг институтов УрФУ</caption>
+
+                <tr>
+                    <th>Институт</th>
+                    <th>Количество ссылок</th>
+                </tr>
+
+                ${table}
+            </table>
+        </body>
+    </html>
+    `;
+
+    return page;
+}
+
+var app = express();
+
+app.get('/', function (req, res) {
+    let page = getPage();
+    res.send(page);
+});
+
+app.listen(80, function () {
+    console.log('Example app listening on port 80!');
+});
