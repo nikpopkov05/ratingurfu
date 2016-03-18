@@ -9,7 +9,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "bayes": "0.0.4",
     "express": "^4.13.4",
     "htmlparser2": "^3.9.0"
   }

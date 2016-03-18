@@ -9,22 +9,31 @@ var express = require('express');
 //============================================================
 
 var stopList = require('./stoplist.js');
-var strStopList = '';
-var firstStopList = true;
-for (let i = 0; i < stopList.length; ++i) {
-    if (firstStopList) {
-        strStopList += '(' + stopList[i] + ')';
-        firstStopList = false;
-    } else {
-        strStopList += '|(' + stopList[i] + ')';
-    }
+for (let i = 0; i < stopList.length; i++) {
+    stopList[i] = toLowerCase(stopList[i]);
 }
-var regStopList = new RegExp(strStopList, "g");
+
 var regToken = new RegExp("([\u0410-\u044f\u0401\u0451]+)|([a-zA-Z]+)|([0-9]+)", "g");
+
+function isStopList(lexeme)
+{
+    function cmp(element, index, array)
+    {
+        if (element === lexeme) {
+            return true;
+        }
+        return false;
+    }
+
+    let a = stopList.find(cmp);
+    if (a !== undefined) {
+        return true;
+    }
+    return false;
+}
 
 function tokenize(text)
 {
-    text = text.replace(regStopList, ' ');
     let lexemes = text.match(regToken);
     if (!lexemes) {
         lexemes = [];
@@ -34,18 +43,18 @@ function tokenize(text)
 
 function toLowerCase(lexeme)
 {
-    let string = '';
+    let str = '';
     for (let i = 0; i < lexeme.length; ++i) {
         if (lexeme[i] >= '\u0410' && lexeme[i] <= '\u042f') {
             let code = lexeme.charCodeAt(i) + 32;
-            string += String.fromCharCode(code);
+            str += String.fromCharCode(code);
         } else if (lexeme[i] === '\u0401' || lexeme[i] === '\u0451') {
-            string += '\u0435';
+            str += '\u0435';
         } else {
-            string += lexeme[i];
+            str += lexeme[i];
         }
     }
-    return string;
+    return str;
 }
 
 function deleteDefis(lexeme)
@@ -80,9 +89,11 @@ function tokenizeAndStem(text)
     for (let i = 0; i < lexemes.length; ++i) {
         let lexeme = deleteDefis(lexemes[i]);
         lexeme = toLowerCase(lexeme);
-        lexeme = stemmer.stem(lexeme);
-        if (lexeme !== '') {
-            outLexemes.push(lexeme);
+        if (isStopList(lexeme) === false) {
+            lexeme = stemmer.stem(lexeme);
+            if (lexeme !== '') {
+                outLexemes.push(lexeme);
+            }
         }
     }
     return outLexemes;
@@ -104,12 +115,34 @@ arrСategories.sort(function(a, b) {
     return 0;
 });
 
-var bayes = require('bayes');
-var classifier = bayes({tokenizer: tokenizeAndStem});
+var categoriesSports = require('./categoriesSports.js');
+let arrСategoriesSports = [];
+for (let key in categories) {
+    if (key !== 'Other' && key !== 'other') {
+        arrСategoriesSports.push({
+            name: key,
+            total: categories[key]
+        });
+    }
+}
+arrСategoriesSports.sort(function(a, b) {
+    if (a.total > b.total) return -1;
+    if (a.total < b.total) return 1;
+    return 0;
+});
 
-var db = require('./db.js');
+var bayes = require('./naivebayes');
+var classifier = new bayes(tokenizeAndStem);
+var classifierSports = new bayes(tokenizeAndStem);
+
+var db = require('./db/db.js');
 for (let i = 0; i < db.length; ++i) {
-    classifier.learn(db[i].text, db[i].category);
+    classifier.train(db[i].text, db[i].category);
+}
+
+var dbSports = require('./db/sports.js');
+for (let i = 0; i < dbSports.length; ++i) {
+    classifierSports.train(dbSports[i].text, dbSports[i].category);
 }
 
 //============================================================
@@ -224,7 +257,7 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
                                             count++;
 
                                             if (attribs.href.indexOf('http://urfu.ru/ru/news/news/') === 0) {
-                                                console.log(attribs.href);
+                                                // console.log(attribs.href);
                                             }
                                         }
                                     } else {
@@ -238,7 +271,7 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
                                             count++;
 
                                             if (path.indexOf('http://urfu.ru/ru/news/news/') === 0) {
-                                                console.log(path);
+                                                // console.log(path);
                                             }
                                         }
                                     }
@@ -250,16 +283,21 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
                             if (text !== '' && flagScan === true) {
                                 let lexemes = tokenize(text);
                                 if (lexemes.length > 0) {
-                                    let category = classifier.categorize(text);
+                                    // console.log(text);
+                                    let category = classifier.classify(text);
                                     if (category !== null) {
                                         categories[category]++;
                                         // /*if (category === 'Институт физической культуры, спорта и молодежной политики') */{
-                                        //     console.log('/**=============');
-                                        //     console.log(category);
-                                        //     console.log(text);
-                                        //     console.log(new Buffer(text));
-                                        //     console.log('=============*/\n');
+                                            // console.log('/**=============');
+                                            // console.log(category);
+                                            // console.log(text);
+                                            // console.log('=============*/\n');
                                         // }
+                                    }
+
+                                    category = classifierSports.classify(text);
+                                    if (category !== null) {
+                                        categoriesSports[category]++;
                                     }
                                 }
                             }
@@ -347,6 +385,22 @@ setInterval(function(params) {
         return 0;
     });
 
+    arrСategoriesSports = [];
+    for (let key in categoriesSports) {
+        if (key !== 'Other' && key !== 'other') {
+            arrСategoriesSports.push({
+                name: key,
+                total: categoriesSports[key]
+            });
+        }
+    }
+    arrСategoriesSports.sort(function(a, b) {
+        if (a.total > b.total) return -1;
+        if (a.total < b.total) return 1;
+        return 0;
+    });
+
+
     // let lines = process.stdout.getWindowSize()[1];
     // for(var i = 0; i < lines; i++) {
     //     console.log('\r\n');
@@ -355,6 +409,9 @@ setInterval(function(params) {
 
     let data = 'module.exports = ' + JSON.stringify(categories, '', 4) + ';';
     fs.writeFileSync(__dirname + '/categories.js', data);
+
+    data = 'module.exports = ' + JSON.stringify(categoriesSports, '', 4) + ';';
+    fs.writeFileSync(__dirname + '/categoriesSports.js', data);
 }, 5000);
 
 function getPage()
@@ -378,7 +435,7 @@ function getPage()
         </head>
         <body>
             <table border="1">
-                <caption>Таблица рейтинг институтов УрФУ</caption>
+                <caption>Рейтинг институтов УрФУ</caption>
 
                 <tr>
                     <th>Институт</th>
