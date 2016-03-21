@@ -12,10 +12,12 @@ var bayes = require('./naivebayes');
 var Stemmer = require('./stemmer').Stemmer;
 var ratingUrfu = require('./ratingurfu.js');
 var ratingUrfuSports = require('./ratingurfusports.js');
+var ratingUrfuPerson = require('./ratingurfuperson.js');
 var stopList = require('./stoplist.js');
 var dbInstitutions = require('./db/institutions.js');
 var dbUrfu = require('./db/urfu.js');
 var dbSports = require('./db/sports.js');
+var dbPerson = require('./db/person.js');
 
 for (let i = 0; i < stopList.length; i++) {
     stopList[i] = toLowerCase(stopList[i]);
@@ -110,9 +112,11 @@ function Handler()
 {
     this.ratingUrfu = ratingUrfu;
     this.ratingUrfuSports = ratingUrfuSports;
+    this.ratingUrfuPerson = ratingUrfuPerson;
     this.classifierInstitutions = new bayes(tokenizeAndStem);
     this.classifierUrfu = new bayes(tokenizeAndStem);
     this.classifierSports = new bayes(tokenizeAndStem);
+    this.classifierPerson = new bayes(tokenizeAndStem);
 
     for (let i = 0; i < dbInstitutions.length; ++i) {
         this.classifierInstitutions.train(dbInstitutions[i].text, dbInstitutions[i].category);
@@ -124,6 +128,10 @@ function Handler()
 
     for (let i = 0; i < dbSports.length; ++i) {
         this.classifierSports.train(dbSports[i].text, dbSports[i].category);
+    }
+
+    for (let i = 0; i < dbPerson.length; ++i) {
+        this.classifierPerson.train(dbPerson[i].text, dbPerson[i].category);
     }
 }
 
@@ -142,10 +150,10 @@ Handler.prototype.run = function(text) {
                         this.ratingUrfu[category] = 1;
                     }
                     // /*if (category === 'Институт физической культуры, спорта и молодежной политики') */{
-                        console.log('/**=============');
-                        console.log(category);
-                        console.log(text);
-                        console.log('=============*/\n');
+                        // console.log('/**=============');
+                        // console.log(category);
+                        // console.log(text);
+                        // console.log('=============*/\n');
                     // }
                 }
 
@@ -155,6 +163,19 @@ Handler.prototype.run = function(text) {
                         this.ratingUrfuSports[category]++;
                     } else {
                         this.ratingUrfuSports[category] = 1;
+                    }
+                    // console.log('/**=============');
+                    // console.log(category);
+                    // console.log(text);
+                    // console.log('=============*/\n');
+                }
+
+                category = this.classifierPerson.classify(text, 1);
+                if (category !== null) {
+                    if (category in this.ratingUrfuPerson) {
+                        this.ratingUrfuPerson[category]++;
+                    } else {
+                        this.ratingUrfuPerson[category] = 1;
                     }
                     console.log('/**=============');
                     console.log(category);
@@ -378,6 +399,9 @@ setInterval(function(params) {
 
     data = 'module.exports = ' + JSON.stringify(handler.ratingUrfuSports, '', 4) + ';\n';
     fs.writeFileSync(__dirname + '/ratingurfusports.js', data);
+
+    data = 'module.exports = ' + JSON.stringify(handler.ratingUrfuPerson, '', 4) + ';\n';
+    fs.writeFileSync(__dirname + '/ratingurfuperson.js', data);
 }, 5000);
 
 function ratingToArrAndSort(objRating)
@@ -404,6 +428,7 @@ function getPage()
 {
     let arrRatingUrfu = ratingToArrAndSort(handler.ratingUrfu);
     let arrRatingUrfuSports = ratingToArrAndSort(handler.ratingUrfuSports);
+    let arrRatingUrfuPerson = ratingToArrAndSort(handler.ratingUrfuPerson);
 
     let tableRatingUrfu = '';
     for (let i = 0; i < arrRatingUrfu.length; i++) {
@@ -425,6 +450,16 @@ function getPage()
         <tr>
             <td>${arrRatingUrfuSports[i].name}</td>
             <td>${arrRatingUrfuSports[i].total}</td>
+        </tr>
+        `;
+    }
+
+    let tableRatingUrfuPerson = '';
+    for (let i = 0; i < arrRatingUrfuPerson.length; i++) {
+        tableRatingUrfuPerson += `
+        <tr>
+            <td>${arrRatingUrfuPerson[i].name}</td>
+            <td>${arrRatingUrfuPerson[i].total}</td>
         </tr>
         `;
     }
@@ -457,6 +492,17 @@ function getPage()
                 </tr>
 
                 ${tableRatingUrfuSports}
+            </table>
+            <br>
+            <table border="1">
+                <caption></caption>
+
+                <tr>
+                    <th></th>
+                    <th>Количество ссылок</th>
+                </tr>
+
+                ${tableRatingUrfuPerson}
             </table>
         </body>
     </html>
