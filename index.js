@@ -132,6 +132,7 @@ Handler.prototype.run = function(text) {
     if (lexemes.length > 0) {
         let category = this.classifierInstitutions.classify(text, 1);
         if (category !== null) {
+            console.log(category);
             if (category === 'УрФУ') {
                 category = this.classifierUrfu.classify(text, 3);
                 if (category !== null) {
