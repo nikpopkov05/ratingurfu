@@ -8,7 +8,15 @@ var express = require('express');
 
 //============================================================
 
+var bayes = require('./naivebayes');
+var Stemmer = require('./stemmer').Stemmer;
+var ratingUrfu = require('./ratingurfu.js');
+var ratingUrfuSports = require('./ratingurfusports.js');
 var stopList = require('./stoplist.js');
+var dbInstitutions = require('./db/institutions.js');
+var dbUrfu = require('./db/urfu.js');
+var dbSports = require('./db/sports.js');
+
 for (let i = 0; i < stopList.length; i++) {
     stopList[i] = toLowerCase(stopList[i]);
 }
@@ -79,7 +87,6 @@ function deleteDefis(lexeme)
     return string;
 }
 
-var Stemmer = require('./stemmer').Stemmer;
 var stemmer = new Stemmer();
 
 function tokenizeAndStem(text)
@@ -99,59 +106,73 @@ function tokenizeAndStem(text)
     return outLexemes;
 };
 
-var categories = require('./categories.js');
-let arrСategories = [];
-for (let key in categories) {
-    if (key !== 'Other' && key !== 'other') {
-        arrСategories.push({
-            name: key,
-            total: categories[key]
-        });
+function Handler()
+{
+    this.ratingUrfu = ratingUrfu;
+    this.ratingUrfuSports = ratingUrfuSports;
+    this.classifierInstitutions = new bayes(tokenizeAndStem);
+    this.classifierUrfu = new bayes(tokenizeAndStem);
+    this.classifierSports = new bayes(tokenizeAndStem);
+
+    for (let i = 0; i < dbInstitutions.length; ++i) {
+        this.classifierInstitutions.train(dbInstitutions[i].text, dbInstitutions[i].category);
+    }
+
+    for (let i = 0; i < dbUrfu.length; ++i) {
+        this.classifierUrfu.train(dbUrfu[i].text, dbUrfu[i].category);
+    }
+
+    for (let i = 0; i < dbSports.length; ++i) {
+        this.classifierSports.train(dbSports[i].text, dbSports[i].category);
     }
 }
-arrСategories.sort(function(a, b) {
-    if (a.total > b.total) return -1;
-    if (a.total < b.total) return 1;
-    return 0;
-});
 
-var categoriesSports = require('./categoriesSports.js');
-let arrСategoriesSports = [];
-for (let key in categoriesSports) {
-    if (key !== 'Other' && key !== 'other') {
-        arrСategoriesSports.push({
-            name: key,
-            total: categoriesSports[key]
-        });
+Handler.prototype.run = function(text) {
+    let lexemes = tokenize(text);
+    if (lexemes.length > 0) {
+        let category = this.classifierInstitutions.classify(text, 1);
+        if (category !== null) {
+            if (category === 'УрФУ') {
+                category = this.classifierUrfu.classify(text, 3);
+                if (category !== null) {
+                    if (category in this.ratingUrfu) {
+                        this.ratingUrfu[category]++;
+                    } else {
+                        this.ratingUrfu[category] = 1;
+                    }
+                    // /*if (category === 'Институт физической культуры, спорта и молодежной политики') */{
+                        console.log('/**=============');
+                        console.log(category);
+                        console.log(text);
+                        console.log('=============*/\n');
+                    // }
+                }
+
+                category = this.classifierSports.classify(text, 1);
+                if (category !== null) {
+                    if (category in this.ratingUrfuSports) {
+                        this.ratingUrfuSports[category]++;
+                    } else {
+                        this.ratingUrfuSports[category] = 1;
+                    }
+                    console.log('/**=============');
+                    console.log(category);
+                    console.log(text);
+                    console.log('=============*/\n');
+                }
+            }
+        }
     }
-}
-arrСategoriesSports.sort(function(a, b) {
-    if (a.total > b.total) return -1;
-    if (a.total < b.total) return 1;
-    return 0;
-});
-
-var bayes = require('./naivebayes');
-var classifier = new bayes(tokenizeAndStem);
-var classifierSports = new bayes(tokenizeAndStem);
-
-var db = require('./db/db.js');
-for (let i = 0; i < db.length; ++i) {
-    classifier.train(db[i].text, db[i].category);
-}
-
-var dbSports = require('./db/sports.js');
-for (let i = 0; i < dbSports.length; ++i) {
-    classifierSports.train(dbSports[i].text, dbSports[i].category);
-}
+};
 
 //============================================================
 
 /**
  * paths : array of string
  */
-function Spider(paths)
+function Spider(paths, handler)
 {
+    this.handler = handler;
     this.paths = paths;
     this.index = 0;
     this.max = 8000;
@@ -233,8 +254,6 @@ Spider.prototype.get = function(path, cb) {
 Spider.prototype.frame = function(paths, index, count, handler, cb) {
     let self = this;
 
-    // console.log(categories);
-
     if (index < paths.length) {
         // console.log(paths[index]);
         // console.log('count', count, self.max, 'index', index, paths.length);
@@ -281,33 +300,7 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
 
                         ontext: function(text) {
                             if (text !== '' && flagScan === true) {
-                                let lexemes = tokenize(text);
-                                if (lexemes.length > 0) {
-                                    // console.log(text);
-                                    let category = classifier.classify(text, 3);
-                                    if (category !== null) {
-                                        if (category in categories) {
-                                            categories[category]++;
-                                        } else {
-                                            categories[category] = 1;
-                                        }
-                                        // /*if (category === 'Институт физической культуры, спорта и молодежной политики') */{
-                                            // console.log('/**=============');
-                                            // console.log(category);
-                                            // console.log(text);
-                                            // console.log('=============*/\n');
-                                        // }
-                                    }
-
-                                    category = classifierSports.classify(text);
-                                    if (category !== null) {
-                                        if (category in categoriesSports) {
-                                            categoriesSports[category]++;
-                                        } else {
-                                            categoriesSports[category] = 1;
-                                        }
-                                    }
-                                }
+                                self.handler.run(text);
                             }
                         },
 
@@ -359,6 +352,7 @@ Spider.prototype.scan = function(handler) {
 
 // module.exports = Spider;
 
+var handler = new Handler();
 var paths = [
     'http://urfu.ru/ru/news/',
     'http://media.ls.urfu.ru/369',
@@ -374,72 +368,62 @@ var paths = [
     'http://ruzha64.wix.com/uvc-fvo-ustu',
     'http://urfu.ru/ru/'
 ];
-var spider = new Spider(paths);
+var spider = new Spider(paths, handler);
 spider.scan();
 
 setInterval(function(params) {
-    arrСategories = [];
-    for (let key in categories) {
-        if (key !== 'Other' && key !== 'other') {
-            arrСategories.push({
-                name: key,
-                total: categories[key]
-            });
-        }
-    }
-    arrСategories.sort(function(a, b) {
-        if (a.total > b.total) return -1;
-        if (a.total < b.total) return 1;
-        return 0;
-    });
+    let data = 'module.exports = ' + JSON.stringify(handler.ratingUrfu, '', 4) + ';\n';
+    fs.writeFileSync(__dirname + '/ratingurfu.js', data);
 
-    arrСategoriesSports = [];
-    for (let key in categoriesSports) {
-        if (key !== 'Other' && key !== 'other') {
-            arrСategoriesSports.push({
-                name: key,
-                total: categoriesSports[key]
-            });
-        }
-    }
-    arrСategoriesSports.sort(function(a, b) {
-        if (a.total > b.total) return -1;
-        if (a.total < b.total) return 1;
-        return 0;
-    });
-
-
-    // let lines = process.stdout.getWindowSize()[1];
-    // for(var i = 0; i < lines; i++) {
-    //     console.log('\r\n');
-    // }
-    // console.log(arrСategories);
-
-    let data = 'module.exports = ' + JSON.stringify(categories, '', 4) + ';';
-    fs.writeFileSync(__dirname + '/categories.js', data);
-
-    data = 'module.exports = ' + JSON.stringify(categoriesSports, '', 4) + ';';
-    fs.writeFileSync(__dirname + '/categoriesSports.js', data);
+    data = 'module.exports = ' + JSON.stringify(handler.ratingUrfuSports, '', 4) + ';\n';
+    fs.writeFileSync(__dirname + '/ratingurfusports.js', data);
 }, 5000);
+
+function ratingToArrAndSort(objRating)
+{
+    let arrRating = [];
+
+    for (let key in objRating) {
+        arrRating.push({
+            name: key,
+            total: objRating[key]
+        });
+    }
+
+    arrRating.sort(function(a, b) {
+        if (a.total > b.total) return -1;
+        if (a.total < b.total) return 1;
+        return 0;
+    });
+
+    return arrRating;
+}
 
 function getPage()
 {
-    let table = '';
-    for (let i = 0; i < arrСategories.length; i++) {
-        table += `
+    let arrRatingUrfu = ratingToArrAndSort(handler.ratingUrfu);
+    let arrRatingUrfuSports = ratingToArrAndSort(handler.ratingUrfuSports);
+
+    let tableRatingUrfu = '';
+    for (let i = 0; i < arrRatingUrfu.length; i++) {
+        if (arrRatingUrfu[i].name === 'Other') {
+            continue;
+        }
+
+        tableRatingUrfu += `
         <tr>
-            <td>${arrСategories[i].name}</td>
-            <td>${arrСategories[i].total}</td>
+            <td>${arrRatingUrfu[i].name}</td>
+            <td>${arrRatingUrfu[i].total}</td>
         </tr>
         `;
     }
 
-    let tableSports = '';
-    for (let i = 0; i < arrСategoriesSports.length; i++) {
-        tableSports += `
+    let tableRatingUrfuSports = '';
+    for (let i = 0; i < arrRatingUrfuSports.length; i++) {
+        tableRatingUrfuSports += `
         <tr>
-            <td>${arrСategoriesSports[i].name}</td>
-            <td>${arrСategoriesSports[i].total}</td>
+            <td>${arrRatingUrfuSports[i].name}</td>
+            <td>${arrRatingUrfuSports[i].total}</td>
         </tr>
         `;
     }
@@ -460,17 +444,18 @@ function getPage()
                     <th>Количество ссылок</th>
                 </tr>
 
-                ${table}
+                ${tableRatingUrfu}
             </table>
+            <br>
             <table border="1">
-                <caption>Рейтинг институтов УрФУ</caption>
+                <caption>Рейтинг видов спорта УрФУ</caption>
 
                 <tr>
                     <th>Вид спорта</th>
                     <th>Количество ссылок</th>
                 </tr>
 
-                ${tableSports}
+                ${tableRatingUrfuSports}
             </table>
         </body>
     </html>

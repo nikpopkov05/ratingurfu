@@ -128,7 +128,7 @@ function classify(text, famousMax)
             }
             wordsSum += Math.log(freq / (wordsUniqueTotal + wordCount));
         }
-        if (famous > famousMax) {
+        if (famous >= famousMax) {
             let res = Math.log(docCount / this.totalDocuments) + wordsSum;
 
             if (first === false) {
