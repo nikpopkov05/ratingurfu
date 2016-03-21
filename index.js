@@ -169,19 +169,19 @@ Handler.prototype.run = function(text) {
                     // console.log(text);
                     // console.log('=============*/\n');
                 }
+            }
 
-                category = this.classifierPerson.classify(text, 1);
-                if (category !== null) {
-                    if (category in this.ratingUrfuPerson) {
-                        this.ratingUrfuPerson[category]++;
-                    } else {
-                        this.ratingUrfuPerson[category] = 1;
-                    }
-                    console.log('/**=============');
-                    console.log(category);
-                    console.log(text);
-                    console.log('=============*/\n');
+            category = this.classifierPerson.classify(text, 1);
+            if (category !== null) {
+                if (category in this.ratingUrfuPerson) {
+                    this.ratingUrfuPerson[category]++;
+                } else {
+                    this.ratingUrfuPerson[category] = 1;
                 }
+                console.log('/**=============');
+                console.log(category);
+                console.log(text);
+                console.log('=============*/\n');
             }
         }
     }
@@ -439,7 +439,7 @@ function getPage()
         tableRatingUrfu += `
         <tr>
             <td>${arrRatingUrfu[i].name}</td>
-            <td>${arrRatingUrfu[i].total}</td>
+            <td align="right">${arrRatingUrfu[i].total}</td>
         </tr>
         `;
     }
@@ -449,7 +449,7 @@ function getPage()
         tableRatingUrfuSports += `
         <tr>
             <td>${arrRatingUrfuSports[i].name}</td>
-            <td>${arrRatingUrfuSports[i].total}</td>
+            <td align="right">${arrRatingUrfuSports[i].total}</td>
         </tr>
         `;
     }
@@ -458,8 +458,8 @@ function getPage()
     for (let i = 0; i < arrRatingUrfuPerson.length; i++) {
         tableRatingUrfuPerson += `
         <tr>
-            <td>${arrRatingUrfuPerson[i].name}</td>
-            <td>${arrRatingUrfuPerson[i].total}</td>
+            <td align="left">${arrRatingUrfuPerson[i].name}</td>
+            <td align="right">${arrRatingUrfuPerson[i].total}</td>
         </tr>
         `;
     }
@@ -472,7 +472,7 @@ function getPage()
             <title>Рейтинг</title>
         </head>
         <body>
-            <table border="1">
+            <table border="1" align="center" width="50%">
                 <caption>Рейтинг институтов УрФУ</caption>
 
                 <tr>
@@ -483,7 +483,7 @@ function getPage()
                 ${tableRatingUrfu}
             </table>
             <br>
-            <table border="1">
+            <table border="1" align="center" width="50%">
                 <caption>Рейтинг видов спорта УрФУ</caption>
 
                 <tr>
@@ -494,7 +494,7 @@ function getPage()
                 ${tableRatingUrfuSports}
             </table>
             <br>
-            <table border="1">
+            <table border="1" align="center" width="50%">
                 <caption></caption>
 
                 <tr>
