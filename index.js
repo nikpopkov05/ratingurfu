@@ -138,9 +138,11 @@ function Handler()
 Handler.prototype.run = function(text) {
     let lexemes = tokenize(text);
     if (lexemes.length > 0) {
+        // console.log(text);
+
         let category = this.classifierInstitutions.classify(text, 1);
         if (category !== null) {
-            console.log(category);
+            // console.log(category);
             if (category === 'УрФУ') {
                 category = this.classifierUrfu.classify(text, 3);
                 if (category !== null) {
@@ -178,10 +180,10 @@ Handler.prototype.run = function(text) {
                 } else {
                     this.ratingUrfuPerson[category] = 1;
                 }
-                console.log('/**=============');
-                console.log(category);
-                console.log(text);
-                console.log('=============*/\n');
+                // console.log('/**=============');
+                // console.log(category);
+                // console.log(text);
+                // console.log('=============*/\n');
             }
         }
     }
@@ -197,7 +199,7 @@ function Spider(paths, handler)
     this.handler = handler;
     this.paths = paths;
     this.index = 0;
-    this.max = 8000;
+    this.max = 100000;
     this.map = {};
 }
 
@@ -292,13 +294,14 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
                                 if (count < self.max) {
                                     if (attribs.href.indexOf('http://') === 0) {
                                         if (!(attribs.href in self.map)) {
-                                            // console.log('<', attribs.href, '>');
+                                            console.log('<', attribs.href, '>');
+
                                             paths.push(attribs.href);
                                             self.map[attribs.href] = true;
                                             count++;
 
                                             if (attribs.href.indexOf('http://urfu.ru/ru/news/news/') === 0) {
-                                                // console.log(attribs.href);
+                                                console.log(attribs.href);
                                             }
                                         }
                                     } else {
@@ -306,13 +309,14 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
                                         let from = obj.href.substring(0, obj.href.indexOf(obj.path));
                                         let path = url.resolve(from, attribs.href);
                                         if (!(path in self.map)) {
-                                            // console.log('<', path, '>');
+                                            console.log('<', path, '>');
+
                                             paths.push(path);
                                             self.map[path] = true;
                                             count++;
 
                                             if (path.indexOf('http://urfu.ru/ru/news/news/') === 0) {
-                                                // console.log(path);
+                                                console.log(path);
                                             }
                                         }
                                     }
@@ -365,7 +369,7 @@ Spider.prototype.scan = function(handler) {
         console.log('scan.end');
         self.index = 0;
         self.map = {};
-        console.log(categories);
+        // console.log(categories);
         process.nextTick(function() {
             self.scan(handler);
         });
@@ -388,7 +392,11 @@ var paths = [
     'http://fizteh.urfu.ru/',
     'http://uvc.urfu.ru/',
     'http://ruzha64.wix.com/uvc-fvo-ustu',
-    'http://urfu.ru/ru/'
+    'http://urfu.ru/ru/',
+    'http://lenta.ru/',
+    'http://eburg.mk.ru/',
+    'http://ria.ru/',
+    'http://www.vesti.ru/'
 ];
 var spider = new Spider(paths, handler);
 spider.scan();
@@ -424,11 +432,29 @@ function ratingToArrAndSort(objRating)
     return arrRating;
 }
 
+function ratingArrSum(arr)
+{
+    let sum = 0;
+
+    for (let i = 0; i < arr.length; i++) {
+        if (arr[i].name === 'Other') {
+            continue;
+        }
+        sum += arr[i].total;
+    }
+
+    return sum;
+}
+
 function getPage()
 {
     let arrRatingUrfu = ratingToArrAndSort(handler.ratingUrfu);
     let arrRatingUrfuSports = ratingToArrAndSort(handler.ratingUrfuSports);
     let arrRatingUrfuPerson = ratingToArrAndSort(handler.ratingUrfuPerson);
+
+    let totalRatingUrfu = ratingArrSum(arrRatingUrfu);
+    let totalRatingUrfuSports = ratingArrSum(arrRatingUrfuSports);
+    let totalRatingUrfuPerson = ratingArrSum(arrRatingUrfuPerson);
 
     let tableRatingUrfu = '';
     for (let i = 0; i < arrRatingUrfu.length; i++) {
@@ -436,20 +462,26 @@ function getPage()
             continue;
         }
 
+        let total = arrRatingUrfu[i].total * 100 / totalRatingUrfu;
+
         tableRatingUrfu += `
         <tr>
             <td>${arrRatingUrfu[i].name}</td>
             <td align="right">${arrRatingUrfu[i].total}</td>
+            <td align="right">${total.toFixed(4)}</td>
         </tr>
         `;
     }
 
     let tableRatingUrfuSports = '';
     for (let i = 0; i < arrRatingUrfuSports.length; i++) {
+        let total = arrRatingUrfuSports[i].total * 100 / totalRatingUrfuSports;
+
         tableRatingUrfuSports += `
         <tr>
             <td>${arrRatingUrfuSports[i].name}</td>
             <td align="right">${arrRatingUrfuSports[i].total}</td>
+            <td align="right">${total.toFixed(4)}</td>
         </tr>
         `;
     }
@@ -478,6 +510,7 @@ function getPage()
                 <tr>
                     <th>Институт</th>
                     <th>Количество ссылок</th>
+                    <th>Количество ссылок, %</th>
                 </tr>
 
                 ${tableRatingUrfu}
@@ -489,6 +522,7 @@ function getPage()
                 <tr>
                     <th>Вид спорта</th>
                     <th>Количество ссылок</th>
+                    <th>Количество ссылок, %</th>
                 </tr>
 
                 ${tableRatingUrfuSports}
