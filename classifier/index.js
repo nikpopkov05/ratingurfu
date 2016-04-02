@@ -14,6 +14,11 @@ function Classifier(tokenizer)
 
 Classifier.prototype.train = function(text, category) {
     let tokens = this.tokenizer.tokenize(text);
+
+    if (tokens.length === 0) {
+        return;
+    }
+
     let node = this.root;
 
     for (let i = 0; i < tokens.length; ++i) {
@@ -31,6 +36,11 @@ Classifier.prototype.train = function(text, category) {
 
 Classifier.prototype.classify = function(text) {
     let tokens = this.tokenizer.tokenize(text);
+
+    if (tokens.length === 0) {
+        return null;
+    }
+
     let categories = new Map();
     let node;
 
