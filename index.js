@@ -83,6 +83,14 @@ function Handler()
             this.classifierPerson.train(dbPerson[i].text[j], dbPerson[i].category);
         }
     }
+
+    this.isDebug = false;
+
+    for (let i = 2; i < process.argv.length; ++i) {
+        if (process.argv[i] === 'debug') {
+            this.isDebug = true;
+        }
+    }
 }
 
 Handler.prototype.run = function(text) {
@@ -95,8 +103,14 @@ Handler.prototype.run = function(text) {
             let category1 = this.classifierUrfu.classify(text);
             console.log(category1);
             if (category1 !== null) {
-                // let fileName = `./${formatDate(new Date())}_${process.pid}.log`;
-                // fs.appendFileSync(fileName, category1 + '\n\n' + text + '\n -----------------------------------------------');
+                if (this.isDebug) {
+                    let fileName = `./log/${formatDate(new Date())}_${process.pid}.log`;
+                    try {
+                        fs.appendFileSync(fileName, `${category}\n${category1}\n\n${text}\n`);
+                    } catch (err) {
+                        console.log(fileName, err);
+                    }
+                }
 
                 if (category1 in this.ratingUrfu) {
                     this.ratingUrfu[category1]++;
@@ -127,7 +141,6 @@ Handler.prototype.run = function(text) {
         }
     }
 };
-
 
 var handler = new Handler();
 var paths = [

@@ -146,9 +146,10 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
                         },
 
                         ontext: function(text) {
+                            text = text.trim();
                             if (text !== '' && flagScan === true) {
                                 // self.handler.run(text);
-                                fullText += text;
+                                fullText += text + '\n';
                             }
                         },
 
