@@ -169,18 +169,6 @@ Handler.prototype.run = function(text, path) {
 var handler = new Handler();
 var paths = [
     'http://urfu.ru/ru/news/',
-    'http://media.ls.urfu.ru/369',
-    'http://hse.edu.urfu.ru/ingener2/',
-    'http://info.urfu.ru/',
-    'http://mmi.urfu.ru/',
-    'http://lyceum.urfu.ru/main/',
-    'http://sti.urfu.ru/home/',
-    'http://enin.urfu.ru/',
-    'http://urfu.ru/ru/about/units/ppur/fakultet-povyshenija-kvalifikacii-prepodavatelei-i-professionalnoi-perepodgotovki/',
-    'http://fizteh.urfu.ru/',
-    'http://uvc.urfu.ru/',
-    'http://ruzha64.wix.com/uvc-fvo-ustu',
-    'http://urfu.ru/ru/',
     'http://lenta.ru/',
     'http://eburg.mk.ru/',
     'http://ria.ru/',

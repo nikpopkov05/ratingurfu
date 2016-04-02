@@ -13,7 +13,7 @@ function Spider(paths, handler)
     this.handler = handler;
     this.paths = paths;
     this.index = 0;
-    this.max = 100000;
+    this.max = 1000000;
     this.map = {};
 }
 
@@ -91,6 +91,8 @@ Spider.prototype.get = function(path, cb) {
  */
 Spider.prototype.frame = function(paths, index, count, handler, cb) {
     let self = this;
+
+    console.log(`index ${index}/${self.max}`);
 
     if (index < paths.length) {
         self.get(paths[index], function(err, buffer) {
