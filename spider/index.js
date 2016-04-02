@@ -133,13 +133,16 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
 
                                     if (!(href in self.map)) {
                                         // console.log('<', href, '>');
-                                        if (href.indexOf('http://urfu.ru/ru/news/news/') === 0) {
-                                            console.log(href);
+                                        if (href.indexOf(self.paths[self.index]) === 0) {
+                                            // console.log(href);
+                                            paths.push(href);
+                                            self.map[href] = true;
+                                            ++count;
                                         }
 
-                                        paths.push(href);
-                                        self.map[href] = true;
-                                        ++count;
+                                        // paths.push(href);
+                                        // self.map[href] = true;
+                                        // ++count;
                                     }
                                 }
                             }
@@ -163,7 +166,7 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
                     parser.write(buffer.toString());
                     parser.end();
 
-                    self.handler.run(fullText);
+                    self.handler.run(fullText, paths[index]);
                 }
             }
 

@@ -93,50 +93,74 @@ function Handler()
     }
 }
 
-Handler.prototype.run = function(text) {
+Handler.prototype.run = function(text, path) {
     let category = this.classifierInstitutions.classify(text);
-    // console.log(text);
+
+    console.log(path);
     console.log(category);
 
     if (category) {
-        if (category === 'УрФУ') {
+        if (category[0].category === 'УрФУ') {
+
+
             let category1 = this.classifierUrfu.classify(text);
+
             console.log(category1);
-            if (category1 !== null) {
+
+            if (category1) {
                 if (this.isDebug) {
                     let fileName = `./log/${formatDate(new Date())}_${process.pid}.log`;
+
                     try {
-                        fs.appendFileSync(fileName, `${category}\n${category1}\n\n${text}\n`);
+                        fs.appendFileSync(fileName, `${JSON.stringify(category, '', 4)}\n${JSON.stringify(category1, '', 4)}\n\n${text}\n`);
                     } catch (err) {
                         console.log(fileName, err);
                     }
                 }
 
-                if (category1 in this.ratingUrfu) {
-                    this.ratingUrfu[category1]++;
-                } else {
-                    this.ratingUrfu[category1] = 1;
+                for (let i = 0; i < category1.length; ++i) {
+                    if (category1[i].total > 0) {
+                        if (category1[i].category in this.ratingUrfu) {
+                            this.ratingUrfu[category1[i].category]++;
+                        } else {
+                            this.ratingUrfu[category1[i].category] = 1;
+                        }
+                    }
                 }
             }
 
-            category = this.classifierSports.classify(text);
-            console.log(category);
-            if (category !== null) {
-                if (category in this.ratingUrfuSports) {
-                    this.ratingUrfuSports[category]++;
-                } else {
-                    this.ratingUrfuSports[category] = 1;
+
+            let category2 = this.classifierSports.classify(text);
+
+            console.log(category2);
+
+            if (category2) {
+                for (let i = 0; i < category2.length; ++i) {
+                    if (category2[i].total > 0) {
+                        if (category2[i].category in this.ratingUrfuSports) {
+                            this.ratingUrfuSports[category2[i].category]++;
+                        } else {
+                            this.ratingUrfuSports[category2[i].category] = 1;
+                        }
+                    }
                 }
             }
         }
 
-        category = this.classifierPerson.classify(text);
-        console.log(category);
-        if (category !== null) {
-            if (category in this.ratingUrfuPerson) {
-                this.ratingUrfuPerson[category]++;
-            } else {
-                this.ratingUrfuPerson[category] = 1;
+
+        let category3 = this.classifierPerson.classify(text);
+
+        console.log(category3);
+
+        if (category3) {
+            for (let i = 0; i < category3.length; ++i) {
+                if (category3[i].total > 0) {
+                    if (category3[i].category in this.ratingUrfuPerson) {
+                        this.ratingUrfuPerson[category3[i].category]++;
+                    } else {
+                        this.ratingUrfuPerson[category3[i].category] = 1;
+                    }
+                }
             }
         }
     }

@@ -65,24 +65,33 @@ Classifier.prototype.classify = function(text) {
         }
     }
 
-    let first = true;
-    let max;
-    let category = null;
-
-    for (let key of categories) {
-        if (first) {
-            category = key[0];
-            max = key[1];
-            first = false;
-        } else {
-            if (max < key[1]) {
-                category = key[0];
-                max = key[1];
-            }
-        }
+    if (categories.size === 0) {
+        return null;
     }
 
-    return category;
+    let result = [];
+
+    for (let key of categories) {
+        result.push({
+            "category": key[0],
+            "total": key[1]
+        });
+    }
+
+    result.sort(compare);
+
+    return result;
 };
+
+function compare(a, b)
+{
+    if (a.total < b.total) {
+        return 1;
+    } else if (a.total > b.total) {
+        return -1;
+    } else {
+        return 0;
+    }
+}
 
 module.exports = Classifier;
