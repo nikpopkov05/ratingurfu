@@ -2,6 +2,7 @@
 
 var fs = require('fs');
 var express = require('express');
+// var mysql = require('mysql');
 var Classifier = require('./classifier');
 var Tokenizer = require('./tokenizer');
 var Spider = require('./spider');
@@ -16,6 +17,36 @@ var dbPerson = require('./db/person.js');
 var ratingUrfu = require('./ratingurfu.js');
 var ratingUrfuSports = require('./ratingurfusports.js');
 var ratingUrfuPerson = require('./ratingurfuperson.js');
+
+// var mysqlConnection = mysql.createConnection({
+//     host     : 'localhost',
+//     port     :  3306,
+//     user     : 'urfu',
+//     password : '9294',
+//     database : 'urfu'
+// });
+
+// mysqlConnection.connect(function(err) {
+//     if (err) {
+//         console.error('error connecting: ' + err.stack);
+//         throw err;
+//     }
+
+//     console.log('connected as id ' + mysqlConnection.threadId);
+
+//     mysqlConnection.query('CREATE TABLE IF NOT EXISTS scan (id INT(11) AUTO_INCREMENT PRIMARY KEY, url VARCHAR(255));', function(err, result) {
+//         if (err) {
+//             console.log(err);
+//             throw err;
+//         }
+//         console.log(result);
+//     });
+// });
+
+// mysqlConnection.on('error', function(err) {
+//     console.log(err);
+//     mysqlConnection = null;
+// });
 
 function formatDate(date)
 {
@@ -164,6 +195,44 @@ Handler.prototype.run = function(text, path) {
             }
         }
     }
+
+    // if (mysqlConnection === null) {
+    //     mysqlConnection = mysql.createConnection({
+    //         host     : 'localhost',
+    //         port     :  3306,
+    //         user     : 'urfu',
+    //         password : '9294',
+    //         database : 'urfu'
+    //     });
+
+    //     mysqlConnection.connect(function(err) {
+    //         if (err) {
+    //             console.error('error connecting: ' + err.stack);
+    //             throw err;
+    //         }
+
+    //         console.log('connected as id ' + mysqlConnection.threadId);
+
+    //         mysqlConnection.query('CREATE TABLE IF NOT EXISTS scan (id INT(11) AUTO_INCREMENT PRIMARY KEY, url VARCHAR(255));', function(err, result) {
+    //             if (err) {
+    //                 console.log(err);
+    //                 throw err;
+    //             }
+    //             console.log(result);
+    //         });
+    //     });
+
+    //     mysqlConnection.on('error', function(err) {
+    //         console.log(err);
+    //         mysqlConnection = null;
+    //     });
+    // }
+
+    // mysqlConnection.query('INSERT INTO `scan` (`url`) VALUES ("' + path + '");', function(err, result) {
+    //     if (err) {
+    //         console.log(err);
+    //     }
+    // });
 };
 
 var handler = new Handler();

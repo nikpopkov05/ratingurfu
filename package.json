@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "express": "^4.13.4",
-    "htmlparser2": "^3.9.0"
+    "htmlparser2": "^3.9.0",
+    "mysql": "^2.10.2"
   }
 }
