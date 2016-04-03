@@ -1,12 +1,12 @@
 {
-  "name": "spider",
-  "version": "1.0.0",
+  "name": "ratinurfu",
+  "version": "0.1.0",
   "description": "",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
+  "author": "Arthur Zhanaliev",
   "license": "ISC",
   "dependencies": {
     "express": "^4.13.4",

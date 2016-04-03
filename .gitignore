@@ -1,3 +1,4 @@
 /doc
 /typings
+/jsconfig.json
 *.log
