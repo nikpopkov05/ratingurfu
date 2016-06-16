@@ -173,7 +173,9 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
             }
 
             process.nextTick(function() {
-                self.frame(paths, index + 1, count, handler, cb);
+                setTimeout(function() {
+                    self.frame(paths, index + 1, count, handler, cb);
+                }, 250);
             });
         });
     } else {

@@ -11,12 +11,13 @@ var stopList = require('./stoplist.js');
 var exceptionStem = require('./exceptionStem.js');
 var dbInstitutions = require('./db/institutions.js');
 var dbUrfu = require('./db/urfu.js');
-var dbSports = require('./db/sports.js');
+var dbKindsOfSports = require('./db/kindsofsports.js.js');
 var dbPerson = require('./db/person.js');
 
 var ratingUrfu = require('./ratingurfu.js');
 var ratingUrfuSports = require('./ratingurfusports.js');
 var ratingUrfuPerson = require('./ratingurfuperson.js');
+var ratingInstitutions = require('./ratinginstitutions.js');
 
 // var mysqlConnection = mysql.createConnection({
 //     host     : 'localhost',
@@ -83,12 +84,13 @@ function Handler()
     this.ratingUrfu = ratingUrfu;
     this.ratingUrfuSports = ratingUrfuSports;
     this.ratingUrfuPerson = ratingUrfuPerson;
+    this.ratingInstitutions = ratingInstitutions;
 
     this.tokenizer = new Tokenizer(stopList, exceptionStem);
 
     this.classifierInstitutions = new Classifier(this.tokenizer);
     this.classifierUrfu = new Classifier(this.tokenizer);
-    this.classifierSports = new Classifier(this.tokenizer);
+    this.classifierKindsOfSports = new Classifier(this.tokenizer);
     this.classifierPerson = new Classifier(this.tokenizer);
 
     for (let i = 0; i < dbInstitutions.length; ++i) {
@@ -103,9 +105,9 @@ function Handler()
         }
     }
 
-    for (let i = 0; i < dbSports.length; ++i) {
-        for (let j = 0; j < dbSports[i].text.length; ++j) {
-            this.classifierSports.train(dbSports[i].text[j], dbSports[i].category);
+    for (let i = 0; i < dbKindsOfSports.length; ++i) {
+        for (let j = 0; j < dbKindsOfSports[i].text.length; ++j) {
+            this.classifierKindsOfSports.train(dbKindsOfSports[i].text[j], dbKindsOfSports[i].category);
         }
     }
 
@@ -161,7 +163,7 @@ Handler.prototype.run = function(text, path) {
             }
 
 
-            let category2 = this.classifierSports.classify(text);
+            let category2 = this.classifierKindsOfSports.classify(text);
 
             console.log(category2);
 
@@ -237,7 +239,8 @@ Handler.prototype.run = function(text, path) {
 
 var handler = new Handler();
 var paths = [
-    'http://urfu.ru/ru/news/',
+    'http://www.msu.ru/',
+    // 'http://urfu.ru/ru/news/',
     'http://lenta.ru/',
     'http://eburg.mk.ru/',
     'http://ria.ru/',
@@ -296,10 +299,12 @@ function getPage()
     let arrRatingUrfu = ratingToArrAndSort(handler.ratingUrfu);
     let arrRatingUrfuSports = ratingToArrAndSort(handler.ratingUrfuSports);
     let arrRatingUrfuPerson = ratingToArrAndSort(handler.ratingUrfuPerson);
+    let arrRatingInstitutions = ratingToArrAndSort(handler.ratingInstitutions);
 
     let totalRatingUrfu = ratingArrSum(arrRatingUrfu);
     let totalRatingUrfuSports = ratingArrSum(arrRatingUrfuSports);
     let totalRatingUrfuPerson = ratingArrSum(arrRatingUrfuPerson);
+    let totalRatingInstitutions = ratingArrSum(arrRatingInstitutions);
 
     let tableRatingUrfu = '';
     for (let i = 0; i < arrRatingUrfu.length; i++) {
@@ -341,6 +346,19 @@ function getPage()
         `;
     }
 
+    let tableRatingInstitutions = '';
+    for (let i = 0; i < arrRatingInstitutions.length; i++) {
+        let total = arrRatingInstitutions[i].total * 100 / totalRatingInstitutions;
+
+        tableRatingInstitutions += `
+        <tr>
+            <td>${arrRatingInstitutions[i].name}</td>
+            <td align="right">${arrRatingInstitutions[i].total}</td>
+            <td align="right">${total.toFixed(4)}</td>
+        </tr>
+        `;
+    }
+
     let page = `
     <!DOCTYPE HTML>
     <html>
@@ -360,7 +378,9 @@ function getPage()
 
                 ${tableRatingUrfu}
             </table>
+
             <br>
+
             <table border="1" align="center" width="50%">
                 <caption>Рейтинг видов спорта УрФУ</caption>
 
@@ -372,9 +392,11 @@ function getPage()
 
                 ${tableRatingUrfuSports}
             </table>
+
             <br>
+
             <table border="1" align="center" width="50%">
-                <caption></caption>
+                <caption>Рейтинг персоналий УрФУ</caption>
 
                 <tr>
                     <th></th>
@@ -382,6 +404,20 @@ function getPage()
                 </tr>
 
                 ${tableRatingUrfuPerson}
+            </table>
+
+            <br>
+
+            <table border="1" align="center" width="50%">
+                <caption>Рейтинг вузов России</caption>
+
+                <tr>
+                    <th>Институт</th>
+                    <th>Количество ссылок</th>
+                    <th>Количество ссылок, %</th>
+                </tr>
+
+                ${tableRatingInstitutions}
             </table>
         </body>
     </html>
