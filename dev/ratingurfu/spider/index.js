@@ -1,64 +1,150 @@
 'use strict';
 
-var url = require('url');
-var http = require('http');
-var htmlparser = require("htmlparser2");
+const g_url = require('url');
+const http = require('http');
+const https = require('https');
+const htmlparser = require("htmlparser2");
 const mysql = require('mysql');
-
-var pool = mysql.createPool({
-    connectionLimit: 10,
-    host: 'localhost',
-    user: 'spider',
-    password: 'spider'
-});
-
-pool.query('CREATE DATABASE IF NOT EXISTS `spider` CHARACTER SET utf8 COLLATE utf8_general_ci;', function(err, result) {
-    if (err) {
-        console.log(err);
-        return;
-    }
-
-    console.log(result);
-
-    pool.query('CREATE TABLE IF NOT EXISTS `spider`.`queue` (`id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, `url` TEXT NOT NULL, `hash` TEXT NOT NULL)', function(err, result) {
-        if (err) {
-            console.log(err);
-            return;
-        }
-
-        console.log(result);
-    });
-});
+const Classifier = require('./../classifier');
+const Tokenizer = require('./../tokenizer');
+const stopList = require('./../db/stoplist.js');
+const exceptionStem = require('./../db/exceptionStem.js');
+const dbInstitutions = require('./../db/institutions.js');
 
 /**
  * @param {string[]} paths
- * @param {Object} handler
  */
-function Spider(paths, handler)
+function Spider(paths)
 {
-    this.handler = handler;
-    this.paths = paths;
-    this.index = 0;
-    this.max = 1000000;
-    this.map = {};
+    this.mysqlPool = null;
+    this.paths = [];
+    this.levelMax = 4; // максимальная вложенность
+    this.delay = 1000; // задержка в миллисекундах
+    this.chunkSize = 100;
+    this.tokenizer = new Tokenizer(stopList, exceptionStem);
+    this.classifierInstitutions = new Classifier(this.tokenizer);
+
+    if (Array.isArray(paths)) {
+        for (let i = 0; i < paths.length; ++i) {
+            if (paths[i] && ((typeof paths[i]) == 'string')) {
+                this.paths.push({
+                    "url": paths[i],
+                    "level": 0
+                });
+            }
+        }
+    }
+
+    for (let i = 0; i < dbInstitutions.length; ++i) {
+        for (let j = 0; j < dbInstitutions[i].text.length; ++j) {
+            this.classifierInstitutions.train(dbInstitutions[i].text[j], dbInstitutions[i].category);
+        }
+    }
 }
+
+/**
+ * @callback initCb
+ * @param {Object} err
+ */
+/**
+ * @param {initCb} cb
+ */
+Spider.prototype.init = function(cb) {
+    let self = this;
+
+    self.mysqlPool = mysql.createPool({
+        connectionLimit: 10,
+        host: 'localhost',
+        user: 'ratingurfu',
+        password: 'ratingurfu'
+    });
+
+    self.mysqlPool.query('CREATE DATABASE IF NOT EXISTS `spider` CHARACTER SET utf8 COLLATE utf8_general_ci;', function(err, result) {
+        if (err) {
+            process.nextTick(cb, err);
+            return;
+        }
+
+        self.mysqlPool.query('CREATE TABLE IF NOT EXISTS `spider`.`queue` (`id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT, `url` TEXT NOT NULL, `level` INT(11) UNSIGNED NOT NULL, `date` DATE NOT NULL, UNIQUE(`id`));', function(err, result) {
+            if (err) {
+                process.nextTick(cb, err);
+                return;
+            }
+
+            self.mysqlPool.query('CREATE TABLE IF NOT EXISTS `spider`.`pages` (`id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT, `url` TEXT NOT NULL, `text` LONGTEXT NOT NULL, `date` DATE NOT NULL, UNIQUE(`id`));', function(err, result) {
+                if (err) {
+                    process.nextTick(cb, err);
+                    return;
+                }
+
+                process.nextTick(cb, null);
+            });
+        });
+    });
+};
 
 /**
  * cb : function(err: object, buffer: Buffer)
  */
 Spider.prototype.get = function(path, cb) {
-    let time = 1 * 60 * 1000;
+    let time = 15 * 1000;
     let timeout = null;
 
     let state = true;
 
-    try {
-        let request = http.get(path, function(response) {
-            let buffer = null;
+    if (path.indexOf('http://') == 0) {
+        try {
+            let request = http.get(path, function(response) {
+                let buffer = null;
 
-            response.on('error', function(err) {
+                response.on('error', function(err) {
+                    if (timeout) {
+                        clearTimeout(timeout);
+                        timeout = null;
+                    }
+
+                    if (state) {
+                        state = false;
+                        process.nextTick(cb, err);
+                    }
+                });
+
+                response.on('data', function(data) {
+                    if (timeout) {
+                        clearTimeout(timeout);
+                        timeout = null;
+                    }
+
+                    timeout = setTimeout(function() {
+                        request.abort();
+                    }, time);
+
+                    if (data) {
+                        if (buffer) {
+                            buffer = Buffer.concat([buffer, data]);
+                        } else {
+                            buffer = data;
+                        }
+                    }
+                });
+
+                response.on('end', function() {
+                    if (timeout) {
+                        clearTimeout(timeout);
+                        timeout = null;
+                    }
+
+                    if (state) {
+                        state = false;
+                        process.nextTick(cb, null, buffer);
+                    }
+                });
+            });
+
+            request.on('error', function(err) {
                 if (timeout) {
                     clearTimeout(timeout);
+                    timeout = null;
                 }
 
                 if (state) {
@@ -67,58 +153,94 @@ Spider.prototype.get = function(path, cb) {
                 }
             });
 
-            response.on('data', function(data) {
-                if (timeout) {
-                    clearTimeout(timeout);
-                }
-
-                timeout = setTimeout(function() {
-                    request.abort();
-                }, time);
-
-                if (data) {
-                    if (buffer) {
-                        buffer = Buffer.concat([buffer, data]);
-                    } else {
-                        buffer = data;
-                    }
-                }
-            });
-
-            response.on('end', function() {
-                if (timeout) {
-                    clearTimeout(timeout);
-                }
-
-                if (state) {
-                    state = false;
-                    process.nextTick(cb, null, buffer);
-                }
-            });
-        });
-
-        request.on('error', function(err) {
+            timeout = setTimeout(function() {
+                request.abort();
+            }, time);
+        } catch (err) {
             if (timeout) {
                 clearTimeout(timeout);
+                timeout = null;
             }
 
             if (state) {
                 state = false;
                 process.nextTick(cb, err);
             }
-        });
-
-        timeout = setTimeout(function() {
-            request.abort();
-        }, time);
-    } catch (err) {
-        if (timeout) {
-            clearTimeout(timeout);
         }
+    } else {
+        try {
+            let request = https.get(path, function(response) {
+                let buffer = null;
 
-        if (state) {
-            state = false;
-            process.nextTick(cb, err);
+                response.on('error', function(err) {
+                    if (timeout) {
+                        clearTimeout(timeout);
+                        timeout = null;
+                    }
+
+                    if (state) {
+                        state = false;
+                        process.nextTick(cb, err);
+                    }
+                });
+
+                response.on('data', function(data) {
+                    if (timeout) {
+                        clearTimeout(timeout);
+                        timeout = null;
+                    }
+
+                    timeout = setTimeout(function() {
+                        request.abort();
+                    }, time);
+
+                    if (data) {
+                        if (buffer) {
+                            buffer = Buffer.concat([buffer, data]);
+                        } else {
+                            buffer = data;
+                        }
+                    }
+                });
+
+                response.on('end', function() {
+                    if (timeout) {
+                        clearTimeout(timeout);
+                        timeout = null;
+                    }
+
+                    if (state) {
+                        state = false;
+                        process.nextTick(cb, null, buffer);
+                    }
+                });
+            });
+
+            request.on('error', function(err) {
+                if (timeout) {
+                    clearTimeout(timeout);
+                    timeout = null;
+                }
+
+                if (state) {
+                    state = false;
+                    process.nextTick(cb, err);
+                }
+            });
+
+            timeout = setTimeout(function() {
+                request.abort();
+            }, time);
+        } catch (err) {
+            if (timeout) {
+                clearTimeout(timeout);
+                timeout = null;
+            }
+
+            if (state) {
+                state = false;
+                process.nextTick(cb, err);
+            }
         }
     }
 };
@@ -126,120 +248,405 @@ Spider.prototype.get = function(path, cb) {
 /**
  * cb : function()
  */
-Spider.prototype.frame = function(paths, index, count, handler, cb) {
+Spider.prototype.parsePages = function(index, arr, cb) {
     let self = this;
 
-    console.log(`index ${index}/${self.max}`);
+    // process.stdout.write(`\u000D${index}/${arr.length}`);
 
-    if (index < paths.length) {
-        self.get(paths[index], function(err, buffer) {
+    if (index < arr.length) {
+        self.get(arr[index].url, function(err, buffer) {
             if (!err) {
                 if (buffer) {
-                    let fullText = '';
-                    let flagScan = true;
-                    let parser = new htmlparser.Parser({
-                        onopentag: function(name, attribs) {
-                            if (name === 'script' || name === 'style') {
-                                flagScan = false;
-                            } else if (name === 'a' && attribs.href) {
-                                if (count < self.max) {
-                                    let href = attribs.href;
+                    self.parseOnePage(arr[index].url, arr[index].level, buffer, function(err, res) {
+                        if (!err) {
+                            self.insertArrToQueue(res.paths, function() {
+                                let category = self.classifierInstitutions.classify(res.text);
 
-                                    if (attribs.href.indexOf('http://') !== 0) {
-                                        let obj = url.parse(paths[index]);
-                                        let from = obj.href.substring(0, obj.href.indexOf(obj.path));
-                                        href = url.resolve(from, attribs.href);
-                                    }
-
-                                    let pathname = url.parse(href).pathname;
-                                    if (pathname) {
-                                        let files = [
-                                            '.pdf', '.PDF',
-                                            '.doc', '.DOC',
-                                            '.docx', '.DOCX',
-                                            '.pptx', '.PPTX',
-                                            '.xlsx', '.XLSX',
-                                            '.gif', '.GIF',
-                                            '.png', '.PNG',
-                                            '.jpg', '.JPG'
-                                        ];
-                                        for (let i = 0; i < files.length; ++i) {
-                                            if (pathname.lastIndexOf(files[i]) === (pathname.length - files[i].length)) {
-                                                return;
-                                            }
-                                        }
-                                    }
-
-                                    if (!(href in self.map)) {
-                                        // console.log('<', href, '>');
-                                        if (href.indexOf(self.paths[self.index]) === 0) {
-                                            console.log(href);
-                                            paths.push(href);
-                                            self.map[href] = true;
-                                            ++count;
-                                        }
-
-                                        // paths.push(href);
-                                        // self.map[href] = true;
-                                        // ++count;
-                                    }
+                                if (category) {
+                                    self.insertPages(arr[index].url, res.text, function(err) {
+                                        setTimeout(function() {
+                                            self.parsePages(index + 1, arr, cb);
+                                        }, self.delay);
+                                    });
+                                } else {
+                                    setTimeout(function() {
+                                        self.parsePages(index + 1, arr, cb);
+                                    }, self.delay);
                                 }
-                            }
-                        },
-
-                        ontext: function(text) {
-                            text = text.trim();
-                            if (text !== '' && flagScan === true) {
-                                // self.handler.run(text);
-                                fullText += text + '\n';
-                            }
-                        },
-
-                        onclosetag: function(tagname) {
-                            if (tagname === 'script' || tagname === 'style') {
-                                flagScan = true;
-                            }
+                            });
+                        } else {
+                            setTimeout(function() {
+                                self.parsePages(index + 1, arr, cb);
+                            }, self.delay);
                         }
-                    }, { decodeEntities: true });
-
-                    parser.write(buffer.toString());
-                    parser.end();
-
-                    self.handler.run(fullText, paths[index]);
+                    });
+                } else {
+                    setTimeout(function() {
+                        self.parsePages(index + 1, arr, cb);
+                    }, self.delay);
                 }
+            } else {
+                setTimeout(function() {
+                    self.parsePages(index + 1, arr, cb);
+                }, self.delay);
             }
-
-            setTimeout(function() {
-                self.frame(paths, index + 1, count, handler, cb);
-            }, 3000);
         });
     } else {
-        process.nextTick(cb);
+        self.deleteOldPages(function() {
+            // console.log('deleteOldPages');
+            process.nextTick(cb);
+        });
+    }
+};
+
+Spider.prototype.parseOnePage = function(url, level, buffer, cb) {
+    let self = this;
+
+    let result = {
+        "text": '',
+        "paths": []
+    };
+
+    let flagScan = true;
+
+    let parser = new htmlparser.Parser({
+        onopentag: function(name, attribs) {
+            if ((name == 'script') || (name == 'style')) {
+                flagScan = false;
+            } else if ((name == 'a') && attribs && ((typeof attribs) == 'object') && attribs.href && ((typeof attribs.href) == 'string')) {
+                if (level < self.levelMax) {
+                    let href = '';
+
+                    if ((attribs.href.indexOf('http://') == 0) || (attribs.href.indexOf('https://') == 0)) {
+                        let objUrl1 = g_url.parse(url);
+                        let objUrl2 = g_url.parse(attribs.href);
+
+                        if (objUrl1.host && objUrl2.host && (objUrl1.host == objUrl2.host) && (objUrl1.protocol == objUrl2.protocol)) {
+                            let pathname1 = '';
+                            let pathname2 = '';
+
+                            if (objUrl1.pathname) {
+                                pathname1 = objUrl1.pathname;
+                            }
+
+                            if (objUrl2.pathname) {
+                                pathname2 = objUrl2.pathname;
+                            }
+
+                            if (pathname2.indexOf(pathname1) == 0) {
+                                href = attribs.href;
+                            } else {
+                                href = '';
+                            }
+                        } else {
+                            href = '';
+                        }
+                    } else {
+                        let objUrl1 = g_url.parse(url);
+
+                        if (objUrl1.protocol && objUrl1.host) {
+                            let main = `${objUrl1.protocol}//${objUrl1.host}`;
+
+                            href = g_url.resolve(main, attribs.href);
+
+                            let objUrl2 = g_url.parse(href);
+
+                            if (objUrl2.host && objUrl2.protocol && (objUrl1.host == objUrl2.host) && (objUrl1.protocol == objUrl2.protocol)) {
+                                let pathname1 = '';
+                                let pathname2 = '';
+
+                                if (objUrl1.pathname) {
+                                    pathname1 = objUrl1.pathname;
+                                }
+
+                                if (objUrl2.pathname) {
+                                    pathname2 = objUrl2.pathname;
+                                }
+
+                                if (pathname2.indexOf(pathname1) != 0) {
+                                    href = '';
+                                }
+                            } else {
+                                href = '';
+                            }
+                        }
+                    }
+
+                    if (href) {
+                        let pathname = g_url.parse(href).pathname;
+
+                        if (pathname) {
+                            if (!self.isIgnoreUrlPathName(pathname)) {
+                                result.paths.push({
+                                    "url": href,
+                                    "level": level + 1
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        },
+
+        ontext: function(text) {
+            let t = text.trim();
+
+            if (t && flagScan) {
+                result.text += (t + ' \n');
+            }
+        },
+
+        onclosetag: function(tagname) {
+            if ((tagname === 'script') || (tagname === 'style')) {
+                flagScan = true;
+            }
+        }
+    }, { decodeEntities: true });
+
+    parser.write(buffer.toString());
+    parser.end();
+
+    process.nextTick(cb, null, result);
+};
+
+Spider.prototype.isIgnoreUrlPathName = function(url) {
+    let ext = [
+        '.pdf',
+        '.doc',
+        '.docx',
+        '.pptx',
+        '.xlsx',
+        '.gif',
+        '.png',
+        '.jpg'
+    ];
+
+    for (let i = 0; i < ext.length; ++i) {
+        if (url.toLowerCase().lastIndexOf(ext[i].toLowerCase()) == (url.length - ext[i].length)) {
+            return true;
+        }
+    }
+
+    return false;
+};
+
+/**
+ *
+ */
+Spider.prototype.scan = function() {
+    let self = this;
+
+    self.extractFromQueue(self.chunkSize, function(err, res) {
+        if (!err) {
+            if (res.length < 1) {
+                self.insertArrToQueue(self.paths, function() {
+                    setTimeout(function() {
+                        self.scan();
+                    }, self.delay);
+                });
+            } else {
+                self.parsePages(0, res, function() {
+                    setTimeout(function() {
+                        self.scan();
+                    }, self.delay);
+                });
+            }
+        } else {
+            setTimeout(function() {
+                self.scan();
+            }, self.delay);
+        }
+    });
+};
+
+/**
+ * @callback insertArrToQueueCb
+ * @param {Object} err
+ */
+/**
+ * @param {Object[]} arr
+ * @param {insertArrToQueueCb} cb
+ */
+Spider.prototype.insertArrToQueue = function(arr, cb) {
+    let self = this;
+
+    if (Array.isArray(arr) && ((typeof cb) == 'function')) {
+        self.insertArrToQueueFrame(0, arr, function(err, res) {
+            process.nextTick(cb, err, res);
+        });
+    } else {
+        process.nextTick(cb, new Error('invalid args'));
+    }
+};
+
+Spider.prototype.insertArrToQueueFrame = function(index, arr, cb) {
+    let self = this;
+
+    if (index < arr.length) {
+        self.insertToQueue(arr[index].url, arr[index].level, function(err) {
+            self.insertArrToQueueFrame(index + 1, arr, cb);
+        });
+    } else {
+        process.nextTick(cb, null);
     }
 };
 
 /**
- * handler : function(buffer)
+ * @callback insertToQueueCb
+ * @param {Object} err
  */
-Spider.prototype.scan = function(handler) {
+/**
+ * @param {string} url
+ * @param {number} level
+ * @param {insertToQueueCb} cb
+ */
+Spider.prototype.insertToQueue = function(url, level, cb) {
     let self = this;
 
-    if (self.index < self.paths.length) {
-        self.frame([self.paths[self.index]], 0, 0, handler, function() {
-            console.log('frame.end');
-            self.index++;
-            process.nextTick(function() {
-                self.scan(handler);
-            });
-        });
-    } else {
-        console.log('scan.end');
-        self.index = 0;
-        self.map = {};
+    if ((typeof cb) == 'function') {
+        if (url && ((typeof url) == 'string') && ((typeof level) == 'number') && (level >= 0)) {
+            let query = `SELECT * FROM \`spider\`.\`queue\` WHERE ((\`url\`='${url}') && ((TO_DAYS(CURDATE()) - TO_DAYS(\`date\`)) < 3));`;
 
-        setTimeout(function() {
-            self.scan(handler);
-        }, 3000);
+            self.mysqlPool.query(query, function(err, res) {
+                if (!err) {
+                    if (Array.isArray(res)) {
+                        if (res.length < 1) {
+                            let today = new Date();
+                            let date = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+                            let query = `INSERT INTO \`spider\`.\`queue\` SET \`url\` = '${url}', \`level\` = ${level}, \`date\` = '${date}';`;
+
+                            self.mysqlPool.query(query, function(err, res) {
+                                if (!err) {
+                                    process.nextTick(cb, null);
+                                } else {
+                                    process.nextTick(cb, err);
+                                }
+                            });
+                        } else {
+                            process.nextTick(cb, null);
+                        }
+                    } else {
+                        process.nextTick(cb, null);
+                    }
+                } else {
+                    process.nextTick(cb, err);
+                }
+            });
+        } else {
+            process.nextTick(cb, new Error('invalid args'));
+        }
+    } else {
+        throw new Error('нет callback функции');
+    }
+};
+
+/**
+ * @callback extractFromQueueCb
+ * @param {Object} err
+ * @param {Object[]} res
+ */
+/**
+ * @param {number} count
+ * @param {extractFromQueueCb} cb
+ */
+Spider.prototype.extractFromQueue = function(count, cb) {
+    let self = this;
+
+    if ((typeof cb) == 'function') {
+        if (((typeof count) == 'number') && (count > 0)) {
+            let query = `SELECT * FROM \`spider\`.\`queue\` ORDER BY \`id\` LIMIT 0, ${count};`;
+
+            self.mysqlPool.query(query, function(err, res) {
+                if (!err) {
+                    if (Array.isArray(res)) {
+                        let result = res;
+                        let query = `DELETE FROM \`spider\`.\`queue\` ORDER BY \`id\` LIMIT ${count};`;
+
+                        self.mysqlPool.query(query, function(err, res) {
+                            if (!err) {
+                                process.nextTick(cb, null, result);
+                            } else {
+                                process.nextTick(cb, err);
+                            }
+                        });
+                    } else {
+                        process.nextTick(cb, new Error('not array'));
+                    }
+                } else {
+                    process.nextTick(cb, err);
+                }
+            });
+        } else {
+            process.nextTick(cb, new Error('invalid args'));
+        }
+    } else {
+        throw new Error('нет callback функции');
+    }
+};
+
+/**
+ * @callback deleteOldPages
+ * @param {Object} err
+ * @param {*} res
+ */
+/**
+ * @param {deleteOldPages} cb
+ */
+Spider.prototype.deleteOldPages = function(cb) {
+    let self = this;
+
+    if ((typeof cb) == 'function') {
+        let query = 'DELETE FROM `spider`.`pages` WHERE ((TO_DAYS(CURDATE()) - TO_DAYS(`date`)) >= 365);';
+
+        self.mysqlPool.query(query, cb);
+    } else {
+        throw new Error('нет callback функции');
+    }
+};
+
+/**
+ *
+ */
+Spider.prototype.insertPages = function(url, text, cb) {
+    let self = this;
+
+    if ((typeof cb) == 'function') {
+        if (url && ((typeof url) == 'string') && text && ((typeof text) == 'string')) {
+            let qUrl = self.mysqlPool.escape(url);
+            let query = `SELECT * FROM \`spider\`.\`pages\` WHERE (\`url\`=${qUrl});`;
+
+            self.mysqlPool.query(query, function(err, res) {
+                if (!err) {
+                    if (Array.isArray(res)) {
+                        if (res.length < 1) {
+                            let today = new Date();
+                            let date = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+                            let qDate = self.mysqlPool.escape(date);
+                            let qText = self.mysqlPool.escape(text);
+                            let query = `INSERT INTO \`spider\`.\`pages\` SET \`url\` = ${qUrl}, \`text\` = ${qText}, \`date\` = ${qDate};`;
+
+                            self.mysqlPool.query(query, function(err, res) {
+                                if (!err) {
+                                    process.nextTick(cb, null);
+                                } else {
+                                    process.nextTick(cb, err);
+                                }
+                            });
+                        } else {
+                            process.nextTick(cb, null);
+                        }
+                    } else {
+                        process.nextTick(cb, null);
+                    }
+                } else {
+                    process.nextTick(cb, err);
+                }
+            });
+        } else {
+            process.nextTick(cb, new Error('invalid args'));
+        }
+    } else {
+        throw new Error('нет callback функции');
     }
 };
 

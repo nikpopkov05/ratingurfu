@@ -13,13 +13,13 @@ function Tokenizer(stopList, exceptionStem)
     this.stopList = new Set();
 
     for (let i = 0; i < stopList.length; ++i) {
-        this.stopList.add(this.toLowerCase(stopList[i]));
+        this.stopList.add(stopList[i].toLowerCase());
     }
 
     this.exceptionStem = new Set();
 
     for (let i = 0; i < exceptionStem.length; ++i) {
-        this.exceptionStem.add(this.toLowerCase(exceptionStem[i]));
+        this.exceptionStem.add(exceptionStem[i].toLowerCase());
     }
 
     this.regToken = new RegExp("([\u0410-\u044f\u0401\u0451]+)|([a-zA-Z]+)|([0-9]+)", "g");
@@ -40,37 +40,20 @@ Tokenizer.prototype.tokenize = function(text) {
     let lexeme;
 
     for (let i = 0; i < tokens.length; ++i) {
-        lexeme = this.toLowerCase(tokens[i]);
+        lexeme = tokens[i].toLowerCase();
 
         if (this.stopList.has(lexeme) === false) {
             if (this.exceptionStem.has(lexeme) === false) {
                 lexeme = stemmer.stem(lexeme);
             }
 
-            if (lexeme !== '') {
+            if (lexeme && ((typeof lexeme) == 'string')) {
                 outTokens.push(lexeme);
             }
         }
     }
 
     return outTokens;
-};
-
-Tokenizer.prototype.toLowerCase = function(lexeme) {
-    let str = '';
-
-    for (let i = 0; i < lexeme.length; ++i) {
-        if (lexeme[i] >= '\u0410' && lexeme[i] <= '\u042f') {
-            let code = lexeme.charCodeAt(i) + 32;
-            str += String.fromCharCode(code);
-        } else if (lexeme[i] === '\u0401' || lexeme[i] === '\u0451') {
-            str += '\u0435';
-        } else {
-            str += lexeme[i];
-        }
-    }
-
-    return str;
 };
 
 module.exports = Tokenizer;

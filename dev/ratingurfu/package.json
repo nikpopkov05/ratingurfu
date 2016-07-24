@@ -1,6 +1,6 @@
 {
-  "name": "ratinurfu",
-  "version": "0.1.0",
+  "name": "ratingurfu",
+  "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -9,8 +9,7 @@
   "author": "Arthur Zhanaliev",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.13.4",
-    "htmlparser2": "^3.9.0",
-    "mysql": "^2.10.2"
+    "htmlparser2": "^3.9.1",
+    "mysql": "^2.11.1"
   }
 }
