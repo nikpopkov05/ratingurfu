@@ -3,6 +3,32 @@
 var url = require('url');
 var http = require('http');
 var htmlparser = require("htmlparser2");
+const mysql = require('mysql');
+
+var pool = mysql.createPool({
+    connectionLimit: 10,
+    host: 'localhost',
+    user: 'spider',
+    password: 'spider'
+});
+
+pool.query('CREATE DATABASE IF NOT EXISTS `spider` CHARACTER SET utf8 COLLATE utf8_general_ci;', function(err, result) {
+    if (err) {
+        console.log(err);
+        return;
+    }
+
+    console.log(result);
+
+    pool.query('CREATE TABLE IF NOT EXISTS `spider`.`queue` (`id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, `url` TEXT NOT NULL, `hash` TEXT NOT NULL)', function(err, result) {
+        if (err) {
+            console.log(err);
+            return;
+        }
+
+        console.log(result);
+    });
+});
 
 /**
  * @param {string[]} paths
@@ -24,9 +50,10 @@ Spider.prototype.get = function(path, cb) {
     let time = 1 * 60 * 1000;
     let timeout = null;
 
+    let state = true;
+
     try {
         let request = http.get(path, function(response) {
-            let error = null;
             let buffer = null;
 
             response.on('error', function(err) {
@@ -34,8 +61,10 @@ Spider.prototype.get = function(path, cb) {
                     clearTimeout(timeout);
                 }
 
-                error = err;
-                process.nextTick(cb, err);
+                if (state) {
+                    state = false;
+                    process.nextTick(cb, err);
+                }
             });
 
             response.on('data', function(data) {
@@ -61,7 +90,8 @@ Spider.prototype.get = function(path, cb) {
                     clearTimeout(timeout);
                 }
 
-                if (!error) {
+                if (state) {
+                    state = false;
                     process.nextTick(cb, null, buffer);
                 }
             });
@@ -72,7 +102,10 @@ Spider.prototype.get = function(path, cb) {
                 clearTimeout(timeout);
             }
 
-            process.nextTick(cb, err);
+            if (state) {
+                state = false;
+                process.nextTick(cb, err);
+            }
         });
 
         timeout = setTimeout(function() {
@@ -82,7 +115,11 @@ Spider.prototype.get = function(path, cb) {
         if (timeout) {
             clearTimeout(timeout);
         }
-        process.nextTick(cb, err);
+
+        if (state) {
+            state = false;
+            process.nextTick(cb, err);
+        }
     }
 };
 
@@ -136,7 +173,7 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
                                     if (!(href in self.map)) {
                                         // console.log('<', href, '>');
                                         if (href.indexOf(self.paths[self.index]) === 0) {
-                                            // console.log(href);
+                                            console.log(href);
                                             paths.push(href);
                                             self.map[href] = true;
                                             ++count;
@@ -172,11 +209,9 @@ Spider.prototype.frame = function(paths, index, count, handler, cb) {
                 }
             }
 
-            process.nextTick(function() {
-                setTimeout(function() {
-                    self.frame(paths, index + 1, count, handler, cb);
-                }, 250);
-            });
+            setTimeout(function() {
+                self.frame(paths, index + 1, count, handler, cb);
+            }, 3000);
         });
     } else {
         process.nextTick(cb);
@@ -201,9 +236,10 @@ Spider.prototype.scan = function(handler) {
         console.log('scan.end');
         self.index = 0;
         self.map = {};
-        process.nextTick(function() {
+
+        setTimeout(function() {
             self.scan(handler);
-        });
+        }, 3000);
     }
 };
 

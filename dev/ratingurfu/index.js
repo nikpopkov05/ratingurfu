@@ -11,8 +11,9 @@ var stopList = require('./stoplist.js');
 var exceptionStem = require('./exceptionStem.js');
 var dbInstitutions = require('./db/institutions.js');
 var dbUrfu = require('./db/urfu.js');
-var dbKindsOfSports = require('./db/kindsofsports.js.js');
+var dbKindsOfSports = require('./db/kindsofsports.js');
 var dbPerson = require('./db/person.js');
+var dbSports = require('./db/sports.js');
 
 var ratingUrfu = require('./ratingurfu.js');
 var ratingUrfuSports = require('./ratingurfusports.js');
@@ -92,6 +93,7 @@ function Handler()
     this.classifierUrfu = new Classifier(this.tokenizer);
     this.classifierKindsOfSports = new Classifier(this.tokenizer);
     this.classifierPerson = new Classifier(this.tokenizer);
+    this.classifierSports = new Classifier(this.tokenizer);
 
     for (let i = 0; i < dbInstitutions.length; ++i) {
         for (let j = 0; j < dbInstitutions[i].text.length; ++j) {
@@ -117,6 +119,12 @@ function Handler()
         }
     }
 
+    for (let i = 0; i < dbSports.length; ++i) {
+        for (let j = 0; j < dbSports[i].text.length; ++j) {
+            this.classifierSports.train(dbSports[i].text[j], dbSports[i].category);
+        }
+    }
+
     this.isDebug = false;
 
     for (let i = 2; i < process.argv.length; ++i) {
@@ -129,11 +137,13 @@ function Handler()
 Handler.prototype.run = function(text, path) {
     let category = this.classifierInstitutions.classify(text);
 
+    console.log('---------------------------------');
     console.log(path);
     console.log(category);
+    // console.log(text);
 
     if (category) {
-        if (category[0].category === 'УрФУ') {
+        if (category[0].category == 'УрФУ') {
 
 
             let category1 = this.classifierUrfu.classify(text);
@@ -177,6 +187,14 @@ Handler.prototype.run = function(text, path) {
                         }
                     }
                 }
+            }
+        } else if (category[0].category == 'Московский государственный университет им. М. В. Ломоносова') {
+            let category2 = this.classifierSports.classify(text);
+
+            console.log(category2);
+
+            if (category2) {
+                this.ratingInstitutions[category[0].category] += 1;
             }
         }
 
@@ -239,17 +257,17 @@ Handler.prototype.run = function(text, path) {
 
 var handler = new Handler();
 var paths = [
-    'http://www.msu.ru/',
+    // 'http://www.msu.ru/news/',
     // 'http://urfu.ru/ru/news/',
-    'http://lenta.ru/',
-    'http://eburg.mk.ru/',
-    'http://ria.ru/',
-    'http://www.vesti.ru/'
+    // 'http://lenta.ru/',
+    // 'http://eburg.mk.ru/',
+    // 'http://ria.ru/',
+    // 'http://www.vesti.ru/'
 ];
 var spider = new Spider(paths, handler);
 spider.scan();
 
-setInterval(function(params) {
+setInterval(function() {
     let data = 'module.exports = ' + JSON.stringify(handler.ratingUrfu, '', 4) + ';\n';
     fs.writeFileSync(__dirname + '/ratingurfu.js', data);
 
@@ -258,6 +276,9 @@ setInterval(function(params) {
 
     data = 'module.exports = ' + JSON.stringify(handler.ratingUrfuPerson, '', 4) + ';\n';
     fs.writeFileSync(__dirname + '/ratingurfuperson.js', data);
+
+    data = 'module.exports = ' + JSON.stringify(handler.ratingInstitutions, '', 4) + ';\n';
+    fs.writeFileSync(__dirname + '/ratinginstitutions.js', data);
 }, 5000);
 
 function ratingToArrAndSort(objRating)
@@ -306,6 +327,7 @@ function getPage()
     let totalRatingUrfuPerson = ratingArrSum(arrRatingUrfuPerson);
     let totalRatingInstitutions = ratingArrSum(arrRatingInstitutions);
 
+    let pos = 1;
     let tableRatingUrfu = '';
     for (let i = 0; i < arrRatingUrfu.length; i++) {
         if (arrRatingUrfu[i].name === 'Other') {
@@ -316,47 +338,62 @@ function getPage()
 
         tableRatingUrfu += `
         <tr>
+            <td>${pos}</td>
             <td>${arrRatingUrfu[i].name}</td>
             <td align="right">${arrRatingUrfu[i].total}</td>
             <td align="right">${total.toFixed(4)}</td>
         </tr>
         `;
+
+        ++pos;
     }
 
+    pos = 1;
     let tableRatingUrfuSports = '';
     for (let i = 0; i < arrRatingUrfuSports.length; i++) {
         let total = arrRatingUrfuSports[i].total * 100 / totalRatingUrfuSports;
 
         tableRatingUrfuSports += `
         <tr>
+            <td>${pos}</td>
             <td>${arrRatingUrfuSports[i].name}</td>
             <td align="right">${arrRatingUrfuSports[i].total}</td>
             <td align="right">${total.toFixed(4)}</td>
         </tr>
         `;
+
+        ++pos;
     }
 
+    pos = 1;
     let tableRatingUrfuPerson = '';
     for (let i = 0; i < arrRatingUrfuPerson.length; i++) {
         tableRatingUrfuPerson += `
         <tr>
+            <td>${pos}</td>
             <td align="left">${arrRatingUrfuPerson[i].name}</td>
             <td align="right">${arrRatingUrfuPerson[i].total}</td>
         </tr>
         `;
+
+        ++pos;
     }
 
+    pos = 1;
     let tableRatingInstitutions = '';
     for (let i = 0; i < arrRatingInstitutions.length; i++) {
         let total = arrRatingInstitutions[i].total * 100 / totalRatingInstitutions;
 
         tableRatingInstitutions += `
         <tr>
+            <td>${pos}</td>
             <td>${arrRatingInstitutions[i].name}</td>
             <td align="right">${arrRatingInstitutions[i].total}</td>
             <td align="right">${total.toFixed(4)}</td>
         </tr>
         `;
+
+        ++pos;
     }
 
     let page = `
@@ -371,6 +408,7 @@ function getPage()
                 <caption>Рейтинг институтов УрФУ</caption>
 
                 <tr>
+                    <th></th>
                     <th>Институт</th>
                     <th>Количество ссылок</th>
                     <th>Количество ссылок, %</th>
@@ -385,6 +423,7 @@ function getPage()
                 <caption>Рейтинг видов спорта УрФУ</caption>
 
                 <tr>
+                    <th></th>
                     <th>Вид спорта</th>
                     <th>Количество ссылок</th>
                     <th>Количество ссылок, %</th>
@@ -400,6 +439,7 @@ function getPage()
 
                 <tr>
                     <th></th>
+                    <th></th>
                     <th>Количество ссылок</th>
                 </tr>
 
@@ -412,6 +452,7 @@ function getPage()
                 <caption>Рейтинг вузов России</caption>
 
                 <tr>
+                    <th></th>
                     <th>Институт</th>
                     <th>Количество ссылок</th>
                     <th>Количество ссылок, %</th>
@@ -425,6 +466,8 @@ function getPage()
 
     return page;
 }
+
+fs.writeFile(__dirname + '/index.html', getPage());
 
 var app = express();
 
