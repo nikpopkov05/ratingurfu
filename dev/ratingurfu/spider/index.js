@@ -18,9 +18,10 @@ function Spider(paths)
 {
     this.mysqlPool = null;
     this.paths = [];
-    this.levelMax = 4; // максимальная вложенность
+    this.levelMax = 100; // максимальная вложенность
     this.delay = 1000; // задержка в миллисекундах
-    this.chunkSize = 100;
+    this.offset = 0;
+    this.count = 100;
     this.tokenizer = new Tokenizer(stopList, exceptionStem);
     this.classifierInstitutions = new Classifier(this.tokenizer);
 
@@ -251,7 +252,7 @@ Spider.prototype.get = function(path, cb) {
 Spider.prototype.parsePages = function(index, arr, cb) {
     let self = this;
 
-    // process.stdout.write(`\u000D${index}/${arr.length}`);
+    process.stdout.write(`\u000D${index}/${arr.length}`);
 
     if (index < arr.length) {
         self.get(arr[index].url, function(err, buffer) {
@@ -293,7 +294,7 @@ Spider.prototype.parsePages = function(index, arr, cb) {
         });
     } else {
         self.deleteOldPages(function() {
-            // console.log('deleteOldPages');
+            console.log('\ndeleteOldPages');
             process.nextTick(cb);
         });
     }
@@ -318,56 +319,57 @@ Spider.prototype.parseOnePage = function(url, level, buffer, cb) {
                     let href = '';
 
                     if ((attribs.href.indexOf('http://') == 0) || (attribs.href.indexOf('https://') == 0)) {
-                        let objUrl1 = g_url.parse(url);
-                        let objUrl2 = g_url.parse(attribs.href);
+                        let objUrl1 = g_url.parse(attribs.href);
 
-                        if (objUrl1.host && objUrl2.host && (objUrl1.host == objUrl2.host) && (objUrl1.protocol == objUrl2.protocol)) {
-                            let pathname1 = '';
-                            let pathname2 = '';
+                        for (let i = 0; i < self.paths.length; ++i) {
+                            let objUrl2 = g_url.parse(self.paths[i].url);
 
-                            if (objUrl1.pathname) {
-                                pathname1 = objUrl1.pathname;
-                            }
-
-                            if (objUrl2.pathname) {
-                                pathname2 = objUrl2.pathname;
-                            }
-
-                            if (pathname2.indexOf(pathname1) == 0) {
-                                href = attribs.href;
-                            } else {
-                                href = '';
-                            }
-                        } else {
-                            href = '';
-                        }
-                    } else {
-                        let objUrl1 = g_url.parse(url);
-
-                        if (objUrl1.protocol && objUrl1.host) {
-                            let main = `${objUrl1.protocol}//${objUrl1.host}`;
-
-                            href = g_url.resolve(main, attribs.href);
-
-                            let objUrl2 = g_url.parse(href);
-
-                            if (objUrl2.host && objUrl2.protocol && (objUrl1.host == objUrl2.host) && (objUrl1.protocol == objUrl2.protocol)) {
+                            if (objUrl1.host && objUrl2.host && (objUrl1.host == objUrl2.host) && (objUrl1.protocol == objUrl2.protocol)) {
                                 let pathname1 = '';
                                 let pathname2 = '';
 
-                                if (objUrl1.pathname) {
+                                if ((typeof objUrl1.pathname) == 'string') {
                                     pathname1 = objUrl1.pathname;
                                 }
 
-                                if (objUrl2.pathname) {
+                                if ((typeof objUrl2.pathname) == 'string') {
                                     pathname2 = objUrl2.pathname;
                                 }
 
-                                if (pathname2.indexOf(pathname1) != 0) {
-                                    href = '';
+                                if (pathname1.indexOf(pathname2) == 0) {
+                                    href = attribs.href;
+                                    break;
                                 }
-                            } else {
-                                href = '';
+                            }
+                        }
+                    } else {
+                        let objUrl0 = g_url.parse(url);
+
+                        if (objUrl0.protocol && objUrl0.host) {
+                            let main = `${objUrl0.protocol}//${objUrl0.host}`;
+                            let href1 = g_url.resolve(main, attribs.href);
+                            let objUrl1 = g_url.parse(href1);
+
+                            for (let i = 0; i < self.paths.length; ++i) {
+                                let objUrl2 = g_url.parse(self.paths[i].url);
+
+                                if (objUrl1.host && objUrl2.host && (objUrl1.host == objUrl2.host) && (objUrl1.protocol == objUrl2.protocol)) {
+                                    let pathname1 = '';
+                                    let pathname2 = '';
+
+                                    if ((typeof objUrl1.pathname) == 'string') {
+                                        pathname1 = objUrl1.pathname;
+                                    }
+
+                                    if ((typeof objUrl2.pathname) == 'string') {
+                                        pathname2 = objUrl2.pathname;
+                                    }
+
+                                    if (pathname1.indexOf(pathname2) == 0) {
+                                        href = href1;
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
@@ -436,7 +438,7 @@ Spider.prototype.isIgnoreUrlPathName = function(url) {
 Spider.prototype.scan = function() {
     let self = this;
 
-    self.extractFromQueue(self.chunkSize, function(err, res) {
+    self.extractFromQueue(function(err, res) {
         if (!err) {
             if (res.length < 1) {
                 self.insertArrToQueue(self.paths, function() {
@@ -546,39 +548,42 @@ Spider.prototype.insertToQueue = function(url, level, cb) {
  * @param {Object[]} res
  */
 /**
- * @param {number} count
  * @param {extractFromQueueCb} cb
  */
-Spider.prototype.extractFromQueue = function(count, cb) {
+Spider.prototype.extractFromQueue = function(cb) {
     let self = this;
 
     if ((typeof cb) == 'function') {
-        if (((typeof count) == 'number') && (count > 0)) {
-            let query = `SELECT * FROM \`spider\`.\`queue\` ORDER BY \`id\` LIMIT 0, ${count};`;
+        let query = `SELECT * FROM \`spider\`.\`queue\` ORDER BY \`id\` LIMIT ${self.offset}, ${self.count};`;
 
-            self.mysqlPool.query(query, function(err, res) {
-                if (!err) {
-                    if (Array.isArray(res)) {
-                        let result = res;
-                        let query = `DELETE FROM \`spider\`.\`queue\` ORDER BY \`id\` LIMIT ${count};`;
+        self.mysqlPool.query(query, function(err, res) {
+            if (!err) {
+                if (Array.isArray(res)) {
+                    console.log(self.offset);
 
-                        self.mysqlPool.query(query, function(err, res) {
-                            if (!err) {
-                                process.nextTick(cb, null, result);
-                            } else {
-                                process.nextTick(cb, err);
-                            }
-                        });
+                    if (res.length > 0) {
+                        self.offset += self.count;
                     } else {
-                        process.nextTick(cb, new Error('not array'));
+                        self.offset = 0;
                     }
+
+                    let result = res;
+                    let query = 'DELETE FROM `spider`.`queue` WHERE ((TO_DAYS(CURDATE()) - TO_DAYS(`date`)) >= 3);';
+
+                    self.mysqlPool.query(query, function(err, res) {
+                        if (!err) {
+                            console.log('\ndelete old queue');
+                        }
+
+                        process.nextTick(cb, null, result);
+                    });
                 } else {
-                    process.nextTick(cb, err);
+                    process.nextTick(cb, new Error('not array'));
                 }
-            });
-        } else {
-            process.nextTick(cb, new Error('invalid args'));
-        }
+            } else {
+                process.nextTick(cb, err);
+            }
+        });
     } else {
         throw new Error('нет callback функции');
     }

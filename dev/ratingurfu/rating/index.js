@@ -22,9 +22,9 @@ function Rating()
         ratingInstitutions: {}
     };
     this.offset = 0;
-    this.count = 5;
-    this.delay = 1000;
-    this.delaySave = 15 * 60 * 1000;
+    this.count = 100;
+    this.delay = 100;
+    this.delaySave = 1 * 60 * 1000;
     this.tokenizer = new Tokenizer(stopList, exceptionStem);
     this.classifierInstitutions = new Classifier(this.tokenizer);
     this.classifierUrfu = new Classifier(this.tokenizer);
@@ -33,24 +33,32 @@ function Rating()
     this.classifierSport = new Classifier(this.tokenizer);
 
     for (let i = 0; i < dbInstitutions.length; ++i) {
+        this.rating.ratingInstitutions[dbInstitutions[i].category] = 0;
+
         for (let j = 0; j < dbInstitutions[i].text.length; ++j) {
             this.classifierInstitutions.train(dbInstitutions[i].text[j], dbInstitutions[i].category);
         }
     }
 
     for (let i = 0; i < dbUrfu.length; ++i) {
+        this.rating.ratingUrfu[dbUrfu[i].category] = 0;
+
         for (let j = 0; j < dbUrfu[i].text.length; ++j) {
             this.classifierUrfu.train(dbUrfu[i].text[j], dbUrfu[i].category);
         }
     }
 
     for (let i = 0; i < dbKindsOfSports.length; ++i) {
+        this.rating.ratingUrfuSports[dbKindsOfSports[i].category] = 0;
+
         for (let j = 0; j < dbKindsOfSports[i].text.length; ++j) {
             this.classifierKindsOfSports.train(dbKindsOfSports[i].text[j], dbKindsOfSports[i].category);
         }
     }
 
     for (let i = 0; i < dbPerson.length; ++i) {
+        this.rating.ratingUrfuPerson[dbPerson[i].category] = 0;
+
         for (let j = 0; j < dbPerson[i].text.length; ++j) {
             this.classifierPerson.train(dbPerson[i].text[j], dbPerson[i].category);
         }
@@ -115,14 +123,31 @@ Rating.prototype.scan = function(cb) {
                     });
                 } else {
                     self.save(function() {
-                        self.offset = 0;
+                        console.log('\nsave');
 
+                        self.offset = 0;
                         self.rating = {
                             ratingUrfu: {},
                             ratingUrfuSports: {},
                             ratingUrfuPerson: {},
                             ratingInstitutions: {}
                         };
+
+                        for (let i = 0; i < dbInstitutions.length; ++i) {
+                            self.rating.ratingInstitutions[dbInstitutions[i].category] = 0;
+                        }
+
+                        for (let i = 0; i < dbUrfu.length; ++i) {
+                            self.rating.ratingUrfu[dbUrfu[i].category] = 0;
+                        }
+
+                        for (let i = 0; i < dbKindsOfSports.length; ++i) {
+                            self.rating.ratingUrfuSports[dbKindsOfSports[i].category] = 0;
+                        }
+
+                        for (let i = 0; i < dbPerson.length; ++i) {
+                            self.rating.ratingUrfuPerson[dbPerson[i].category] = 0;
+                        }
 
                         setTimeout(function() {
                             self.scan();
@@ -341,9 +366,9 @@ Rating.prototype.saveFrame = function(index, arr, cb) {
         let query = querystring.stringify(arr[index]);
 
         self.get(`http://ra-first.com/save.php?${query}`, function(err, res) {
-            process.nextTick(function(params) {
+            setTimeout(function(params) {
                 self.saveFrame(index + 1, arr, cb);
-            });
+            }, 100);
         });
     } else {
         process.nextTick(cb);
