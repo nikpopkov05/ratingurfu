@@ -548,8 +548,9 @@ function isImageOfPerson(imageCaption, personName) {
     const captionLower = imageCaption.toLowerCase();
     const nameParts = personName.toLowerCase().trim().split(/\s+/);
     return nameParts.some(part => part.length > 2 && captionLower.includes(part));
-}                stream.close(); 
-                    resolve(filepath); 
+    stream.close(); 
+    resolve(filepath); 
+}                
          
 
 function getUniversityByUrl(url) {
