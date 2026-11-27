@@ -9,7 +9,11 @@
   "author": "Arthur Zhanaliev",
   "license": "ISC",
   "dependencies": {
-    "htmlparser2": "^3.9.1",
-    "mysql": "^2.11.1"
+    "async": "^3.2.6",
+    "axios": "^1.16.1",
+    "cheerio": "^1.2.0",
+    "htmlparser2": "^3.10.1",
+    "mysql": "^2.18.1",
+    "puppeteer": "^25.1.0"
   }
 }

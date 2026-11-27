@@ -12,9 +12,9 @@ const dbUrfu = require('./../db/urfu.js');
 const dbKindsOfSports = require('./../db/kindsofsports.js');
 const dbPerson = require('./../db/person.js');
 const dbSport = require('./../db/sport.js');
+const fs = require('fs');
 
-function Rating()
-{
+function Rating() {
     this.rating = {
         ratingUrfu: {},
         ratingUrfuSports: {},
@@ -22,8 +22,8 @@ function Rating()
         ratingInstitutions: {}
     };
     this.offset = 0;
-    this.count = 100;
-    this.delay = 100;
+    this.count = 10;
+    this.delay = 50;
     this.delaySave = 1 * 60 * 1000;
     this.tokenizer = new Tokenizer(stopList, exceptionStem);
     this.classifierInstitutions = new Classifier(this.tokenizer);
@@ -71,7 +71,7 @@ function Rating()
     }
 }
 
-Rating.prototype.init = function(cb) {
+Rating.prototype.init = function (cb) {
     let self = this;
 
     self.mysqlPool = mysql.createPool({
@@ -81,19 +81,19 @@ Rating.prototype.init = function(cb) {
         password: 'ratingurfu'
     });
 
-    self.mysqlPool.query('CREATE DATABASE IF NOT EXISTS `rating` CHARACTER SET utf8 COLLATE utf8_general_ci;', function(err, result) {
+    self.mysqlPool.query('CREATE DATABASE IF NOT EXISTS `rating` CHARACTER SET utf8 COLLATE utf8_general_ci;', function (err, result) {
         if (err) {
             process.nextTick(cb, err);
             return;
         }
 
-        self.mysqlPool.query('CREATE TABLE IF NOT EXISTS `rating`.`urfu` (`id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT, `name` TEXT NOT NULL, `count` INT(11) UNSIGNED NOT NULL, `date` DATE NOT NULL, UNIQUE(`id`));', function(err, result) {
+        self.mysqlPool.query('CREATE TABLE IF NOT EXISTS `rating`.`urfu` (`id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT, `name` TEXT NOT NULL, `count` INT(11) UNSIGNED NOT NULL, `date` DATE NOT NULL, UNIQUE(`id`));', function (err, result) {
             if (err) {
                 process.nextTick(cb, err);
                 return;
             }
 
-            self.mysqlPool.query('CREATE TABLE IF NOT EXISTS `rating`.`sport` (`id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT, `name` TEXT NOT NULL, `count` INT(11) UNSIGNED NOT NULL, `date` DATE NOT NULL, UNIQUE(`id`));', function(err, result) {
+            self.mysqlPool.query('CREATE TABLE IF NOT EXISTS `rating`.`sport` (`id` INT(11) UNSIGNED NOT NULL AUTO_INCREMENT, `name` TEXT NOT NULL, `count` INT(11) UNSIGNED NOT NULL, `date` DATE NOT NULL, UNIQUE(`id`));', function (err, result) {
                 if (err) {
                     process.nextTick(cb, err);
                     return;
@@ -105,24 +105,27 @@ Rating.prototype.init = function(cb) {
     });
 };
 
-Rating.prototype.scan = function(cb) {
+Rating.prototype.scan = function (cb) {
+    // console.log("Rating.scan");
+
     let self = this;
 
+    // TODO cursor pagination id
     let query = `SELECT * FROM \`spider\`.\`pages\` ORDER BY \`id\` LIMIT ${self.offset}, ${self.count};`;
 
-    self.mysqlPool.query(query, function(err, res) {
+    self.mysqlPool.query(query, function (err, res) {
         if (!err) {
             if (Array.isArray(res)) {
                 if (res.length > 0) {
                     self.offset += self.count;
 
-                    self.classifyArr(0, res, function(err) {
-                        setTimeout(function() {
+                    self.classifyArr(0, res, function (err) {
+                        setTimeout(function () {
                             self.scan();
                         }, self.delay);
                     });
                 } else {
-                    self.save(function() {
+                    self.save(function () {
                         console.log('\nsave');
 
                         self.offset = 0;
@@ -131,6 +134,7 @@ Rating.prototype.scan = function(cb) {
                             ratingUrfuSports: {},
                             ratingUrfuPerson: {},
                             ratingInstitutions: {}
+
                         };
 
                         for (let i = 0; i < dbInstitutions.length; ++i) {
@@ -149,30 +153,30 @@ Rating.prototype.scan = function(cb) {
                             self.rating.ratingUrfuPerson[dbPerson[i].category] = 0;
                         }
 
-                        setTimeout(function() {
+                        setTimeout(function () {
                             self.scan();
                         }, self.delaySave);
                     });
                 }
             } else {
-                setTimeout(function() {
+                setTimeout(function () {
                     self.scan();
                 }, self.delay);
             }
         } else {
-            setTimeout(function() {
+            setTimeout(function () {
                 self.scan();
             }, self.delay);
         }
     });
 };
 
-Rating.prototype.classifyArr = function(index, arr, cb) {
+Rating.prototype.classifyArr = function (index, arr, cb) {
     let self = this;
 
     if (index < arr.length) {
-        self.classify(arr[index].url, arr[index].text, function() {
-            process.nextTick(function() {
+        self.classify(arr[index].url, arr[index].text, function () {
+            process.nextTick(function () {
                 self.classifyArr(index + 1, arr, cb);
             });
         });
@@ -181,13 +185,14 @@ Rating.prototype.classifyArr = function(index, arr, cb) {
     }
 };
 
-Rating.prototype.classify = function(url, text, cb) {
+Rating.prototype.classify = function (url, text, cb) {
     let self = this;
 
     let categoryInstitutions = self.classifierInstitutions.classify(text);
 
     if (categoryInstitutions) {
-        if (categoryInstitutions[0].category == 'Уральский федеральный университет имени первого Президента России Б. Н. Ельцина') {
+        let set = new Set(['Уральский федеральный университет имени первого Президента России Б. Н. Ельцина'])
+        if (set.has(categoryInstitutions[0].category)) {
             let categorySport = self.classifierSport.classify(text);
 
             if (categorySport) {
@@ -252,23 +257,47 @@ Rating.prototype.classify = function(url, text, cb) {
         }
     }
 
+    // let categoryPerson = self.classifierPerson.classify(text);
+    // if (categoryPerson) {
+    //     for (let i = 0; i < categoryPerson.length; ++i) {
+    //         if (categoryPerson[i].total > 0) {
+    //             if (categoryPerson[i].category in self.rating.ratingUrfuPerson) {
+    //                 self.rating.ratingUrfuPerson[categoryPerson[i].category]++;
+    //             } else {
+    //                 self.rating.ratingUrfuPerson[categoryPerson[i].category] = 1;
+    //             }
+    //         }
+    //     }
+    // }
+
+    fs.writeFileSync("rating.json", JSON.stringify(self.rating, null, 2));
+
+    // for (var sectionName of self.rating)
+    // {
+    //     for (var name of self.rating[sectionName])
+    //     {
+    //         var value = self.rating[sectionName][name];
+    //         slq upsert
+    //     }
+    // }
+
     process.nextTick(cb);
 };
 
 /**
  * cb : function(err: object, buffer: Buffer)
  */
-Rating.prototype.get = function(path, cb) {
+Rating.prototype.get = function (path, cb) {
     let time = 15 * 1000;
     let timeout = null;
 
     let state = true;
 
     try {
-        let request = http.get(path, function(response) {
+        let request = http.get(path, function (response) {
             let buffer = null;
 
-            response.on('error', function(err) {
+            response.on('error', function (err) {
                 if (timeout) {
                     clearTimeout(timeout);
                     timeout = null;
@@ -280,13 +309,13 @@ Rating.prototype.get = function(path, cb) {
                 }
             });
 
-            response.on('data', function(data) {
+            response.on('data', function (data) {
                 if (timeout) {
                     clearTimeout(timeout);
                     timeout = null;
                 }
 
-                timeout = setTimeout(function() {
+                timeout = setTimeout(function () {
                     request.abort();
                 }, time);
 
@@ -299,7 +328,7 @@ Rating.prototype.get = function(path, cb) {
                 }
             });
 
-            response.on('end', function() {
+            response.on('end', function () {
                 if (timeout) {
                     clearTimeout(timeout);
                     timeout = null;
@@ -312,7 +341,7 @@ Rating.prototype.get = function(path, cb) {
             });
         });
 
-        request.on('error', function(err) {
+        request.on('error', function (err) {
             if (timeout) {
                 clearTimeout(timeout);
                 timeout = null;
@@ -324,7 +353,7 @@ Rating.prototype.get = function(path, cb) {
             }
         });
 
-        timeout = setTimeout(function() {
+        timeout = setTimeout(function () {
             request.abort();
         }, time);
     } catch (err) {
@@ -340,7 +369,7 @@ Rating.prototype.get = function(path, cb) {
     }
 };
 
-Rating.prototype.save = function(cb) {
+Rating.prototype.save = function (cb) {
     let self = this;
 
     let arr = [];
@@ -359,14 +388,17 @@ Rating.prototype.save = function(cb) {
     self.saveFrame(0, arr, cb);
 };
 
-Rating.prototype.saveFrame = function(index, arr, cb) {
+Rating.prototype.saveFrame = function (index, arr, cb) {
+    console.log("saveFrame", arr[index]);
+    // fs.appendFileSync("rating.txt", `${JSON.stringify(arr[index])}\n`);
+
     let self = this;
 
     if (index < arr.length) {
         let query = querystring.stringify(arr[index]);
 
-        self.get(`http://ra-first.com/save.php?${query}`, function(err, res) {
-            setTimeout(function(params) {
+        self.get(`http://ra-first.com/save.php?${query}`, function (err, res) {
+            setTimeout(function (params) {
                 self.saveFrame(index + 1, arr, cb);
             }, 100);
         });
